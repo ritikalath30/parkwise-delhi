@@ -10,5 +10,8 @@
 - [x] Verified one-tap fixes in empty states (each suggestion re-runs the engine)
 - [x] AI explanations rejected per passage if they cite figures not in the ranking data
 - [x] Tests + full journey browser check
+- [x] Three-stage journey: Search → Explore (map + picks) → Plan
+- [x] Parking Safety Score (synthetic indicators) as a ranking factor; compare parking by safety
+- [x] Filter-then-rank with budget/walk as pure filters; OSM walking-route matrix used for eligibility
 - [ ] Spread top picks across different car parks (avoid three picks sharing one nearly full lot)
 - [ ] Restaurant fit (rating, price, cuisine) as a ranking factor, not only a tie-breaker

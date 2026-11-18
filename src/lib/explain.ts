@@ -1,4 +1,5 @@
-import { formatTime, rankReasons, topRecommendations, type Criteria, type Option, type RestaurantEval } from "./engine";
+import { formatTime, rankReasons, topRecommendations, type Criteria, type Option, type RestaurantEval, type RouteMatrix } from "./engine";
+import { SAFETY_BAND_LABEL } from "./safety";
 
 export type PickExplanation = {
   id: string;
@@ -37,8 +38,8 @@ export function freePaidTradeoff(r: RestaurantEval, c: Criteria): string {
 }
 
 /** Rule-based explanation, shown instantly and used whenever the AI is unavailable. */
-export function ruleBasedExplanation(c: Criteria): Explanation {
-  const rec = topRecommendations(c, 3);
+export function ruleBasedExplanation(c: Criteria, routes?: RouteMatrix | null): Explanation {
+  const rec = topRecommendations(c, 3, routes);
   const ranked = rec.restaurants
     .filter((r) => r.eligible && r.best)
     .sort((a, b) => b.best!.score - a.best!.score || b.restaurant.rating - a.restaurant.rating);
@@ -55,13 +56,13 @@ export function ruleBasedExplanation(c: Criteria): Explanation {
   const first = rec.top[0]!;
   const fo = first.best!;
   return {
-    summary: `For a ${formatTime(c.arrival)} ${c.day} arrival, ${first.restaurant.name} scores best (${fo.score}/100) with ${accessLabel(fo)} ${fo.park.parking.name}: ${fo.park.cost === 0 ? "free" : `₹${fo.park.cost}`}, ${fo.park.availabilityPct}% simulated availability and a ~${fo.walkM} m walk.`,
+    summary: `${first.restaurant.name} scores best (${fo.score}/100) for a ${formatTime(c.arrival)} ${c.day} arrival: ${accessLabel(fo)} ${fo.park.parking.name}, ${fo.park.cost === 0 ? "free" : `₹${fo.park.cost}`}, ${fo.park.availabilityPct}% simulated availability, safety ${fo.park.safety.score}/100, ~${fo.walkM} m walk. ${rec.rankedCount} restaurant${rec.rankedCount === 1 ? "" : "s"} fit your filters.`,
     picks: rec.top.map((r, i) => {
       const o = r.best!;
       return {
         id: r.restaurant.id,
-        headline: `${o.park.cost === 0 ? "Free parking" : `₹${o.park.cost} parking`}, ${o.park.availabilityPct}% free, ${o.walkMin}-min walk`,
-        reasoning: `${o.park.parking.name} is ${accessLabel(o)} parking, expected to have about ${o.park.freeSpots} of ${o.park.parking.capacity} spots free (${o.park.availabilityPct}%, simulated). It costs ${o.park.cost === 0 ? "nothing" : `₹${o.park.cost}`} for ${c.hours} h (budget ₹${c.budget}) and is a ~${o.walkM} m walk (${o.straightM} m straight line; limit ${c.walk} m), with roughly ${o.park.searchMin} min to find a spot.`,
+        headline: `${o.park.cost === 0 ? "Free" : `₹${o.park.cost}`} · ${o.park.availabilityPct}% free · safety ${o.park.safety.score}`,
+        reasoning: `${o.park.parking.name} (${accessLabel(o)}) expects ~${o.park.freeSpots} of ${o.park.parking.capacity} spots free and ~${o.park.searchMin} min to park. ${o.park.cost === 0 ? "Free" : `₹${o.park.cost}`} for ${c.hours} h, ~${o.walkM} m ${o.walkSource === "route" ? "OSM walking route" : "estimated walk"}. ${SAFETY_BAND_LABEL[o.park.safety.band]} (${o.park.safety.score}/100, synthetic).`,
         tip:
           o.park.parking.access === "shared"
             ? o.park.parking.note ?? "Shared parking: follow the owner's entry instructions."

@@ -34,7 +34,7 @@ function icon(kind: "dine" | "park", pin: MapPin, active: boolean) {
     html:
       pin.variant === "restricted"
         ? `<div class="pw-pin pw-pin-park pw-pin-restricted ${active ? "is-active" : ""}" aria-label="Restricted, not legal parking: ${esc(pin.name)}">✕</div>`
-        : `<div class="pw-pin pw-pin-park pw-pin-${pin.variant ?? "paid"} ${active ? "is-active" : ""}" style="--avail:${STATUS_VAR[pin.status ?? "good"]}" aria-label="${pin.variant === "free" ? "Free" : pin.variant === "shared" ? "Shared" : "Paid"} authorised parking: ${esc(pin.name)}">P</div>`,
+        : `<div class="pw-pin pw-pin-park pw-pin-${pin.variant ?? "paid"} ${pin.dim ? "is-dim" : ""} ${active ? "is-active" : ""}" style="--avail:${STATUS_VAR[pin.status ?? "good"]}" aria-label="${pin.variant === "free" ? "Free" : pin.variant === "shared" ? "Shared" : "Paid"} authorised parking: ${esc(pin.name)}">P</div>`,
     iconSize: [34, 34],
     iconAnchor: [17, 17],
     popupAnchor: [0, -16],

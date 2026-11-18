@@ -53,3 +53,11 @@ export const getWalkingRoute = createServerFn({ method: "POST" })
       return null;
     }
   });
+
+/** OSM walking distances for all parking → restaurant pairs in an area (null if unavailable). */
+export const getWalkMatrix = createServerFn({ method: "GET" })
+  .inputValidator((d: unknown) => z.object({ area: z.string().max(10) }).parse(d))
+  .handler(async ({ data }) => {
+    const { loadWalkMatrix } = await import("./walk-matrix.server");
+    return loadWalkMatrix(data.area);
+  });

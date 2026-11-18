@@ -128,19 +128,6 @@ describe("availability floor", () => {
   });
 });
 
-describe("dynamic recommendations", () => {
-  const key = (c: Parameters<typeof topRecommendations>[0]) =>
-    topRecommendations(c).top.map((r) => `${r.restaurant.id}:${r.best!.park.parking.id}:${r.best!.score}`).join("|");
-  const c0 = toCriteria({ area: "hkv", time: "13:00", day: "weekday", hours: 2, budget: 150, walk: 600, pref: "both" });
-
-  it("changes when preference, budget, arrival time or walking limit change", () => {
-    expect(key({ ...c0, pref: "free", walk: 1500 })).not.toBe(key(c0));
-    expect(key({ ...c0, budget: 30 })).not.toBe(key(c0));
-    expect(key({ ...c0, arrival: 20 * 60 })).not.toBe(key(c0));
-    expect(key({ ...c0, walk: 250 })).not.toBe(key(c0));
-  });
-});
-
 describe("fix suggestions", () => {
   it("only suggests changes that actually produce results", () => {
     const s = { area: "hkv", time: "23:00", day: "weekend", hours: 2, budget: 150, walk: 600, pref: "both" };

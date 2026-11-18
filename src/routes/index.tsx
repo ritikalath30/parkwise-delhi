@@ -1,7 +1,7 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { zodValidator } from "@tanstack/zod-adapter";
 import { useState } from "react";
-import { Tag, ArrowRight, BrainCircuit, Clock, Footprints, IndianRupee, MapPin, ShieldCheck, Sparkles, Timer } from "lucide-react";
+import { Tag, ArrowRight, Clock, Footprints, IndianRupee, MapPin, Sparkles, Timer } from "lucide-react";
 import heroImg from "@/assets/hauz-khas-dusk.jpg";
 import { Logo, SimulatedNotice, SiteFooter, StepNav } from "@/components/AppShell";
 import { PrefToggle } from "@/components/parking-ui";
@@ -29,12 +29,6 @@ export const Route = createFileRoute("/")({
   component: SearchScreen,
 });
 
-const PRESETS: { label: string; s: CriteriaSearch }[] = [
-  { label: "Saturday dinner · HKV · 8 pm", s: { area: "hkv", time: "20:00", day: "weekend", hours: 2, budget: 150, walk: 600, pref: "both" } },
-  { label: "Weekday lunch · Khan Market · free parking", s: { area: "khan", time: "13:00", day: "weekday", hours: 1, budget: 80, walk: 800, pref: "free" } },
-  { label: "Sunday coffee · CP · 11 am · paid OK", s: { area: "cp", time: "11:00", day: "weekend", hours: 2, budget: 100, walk: 800, pref: "paid" } },
-];
-
 function SearchScreen() {
   const search = Route.useSearch();
   const navigate = useNavigate();
@@ -43,7 +37,7 @@ function SearchScreen() {
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
-    navigate({ to: "/map", search: cleanSearch(form) });
+    navigate({ to: "/explore", search: cleanSearch(form) });
   };
 
   return (
@@ -62,7 +56,7 @@ function SearchScreen() {
         <div className="mx-auto grid max-w-7xl gap-8 px-4 pb-14 pt-10 md:pt-20 lg:grid-cols-[1.1fr_1fr] lg:items-end lg:pb-20">
           <div className="text-ink-foreground">
             <span className="inline-flex items-center gap-2 rounded-full border border-ink-foreground/30 bg-ink-foreground/10 px-3 py-1 text-xs font-medium backdrop-blur">
-              <Sparkles className="h-3.5 w-3.5 text-signal" /> AI-ranked · authorised parking only
+              <Sparkles className="h-3.5 w-3.5 text-signal" /> AI-ranked · authorised parking only · safety-aware
             </span>
             <h1 className="mt-5 text-4xl font-extrabold leading-[1.02] sm:text-5xl lg:text-6xl">
               Eat out in Delhi.
@@ -70,25 +64,12 @@ function SearchScreen() {
               <span className="text-signal">Skip the parking hunt.</span>
             </h1>
             <p className="mt-5 max-w-lg text-base text-ink-foreground/85 sm:text-lg">
-              ParkWise matches restaurants in crowded areas with authorised parking that fits your budget, arrival time and how far you're happy to walk.
+              Restaurants matched with authorised parking that fits your budget, time and walking limit — ranked on availability, safety and distance.
             </p>
-            <div className="mt-6 flex flex-wrap gap-2">
-              {PRESETS.map((p) => (
-                <button
-                  key={p.label}
-                  type="button"
-                  onClick={() => setForm(p.s)}
-                  className="rounded-full border border-ink-foreground/30 bg-ink-foreground/10 px-3 py-1.5 text-xs font-medium text-ink-foreground backdrop-blur transition hover:bg-ink-foreground/20"
-                >
-                  {p.label}
-                </button>
-              ))}
-            </div>
           </div>
 
           <form onSubmit={submit} className="rounded-3xl border border-border bg-card p-5 shadow-[var(--shadow-float)] sm:p-6" aria-label="Plan your visit">
             <h2 className="text-xl font-bold">Plan your visit</h2>
-            <p className="mt-1 text-sm text-muted-foreground">Example: Hauz Khas Village on a weekend evening.</p>
 
             <div className="mt-5 space-y-5">
               <div className="space-y-2">
@@ -132,7 +113,6 @@ function SearchScreen() {
               <div className="space-y-2">
                 <Label className="flex items-center gap-1.5"><Tag className="h-4 w-4 text-primary" /> Parking preference</Label>
                 <PrefToggle value={form.pref} onChange={(v) => set("pref", v)} />
-                <p className="text-[11px] text-muted-foreground">Free = verified ₹0 parking only. Paid is fine = ranks convenience over price.</p>
               </div>
 
               <div className="space-y-3">
@@ -152,7 +132,7 @@ function SearchScreen() {
               </div>
 
               <Button type="submit" variant="signal" size="xl" className="w-full">
-                Find restaurants with parking <ArrowRight />
+                Explore restaurants & parking <ArrowRight />
               </Button>
               <SimulatedNotice />
             </div>
@@ -160,28 +140,6 @@ function SearchScreen() {
         </div>
       </section>
 
-      <section className="mx-auto max-w-7xl px-4 py-14">
-        <div className="grid gap-4 md:grid-cols-3">
-          {[
-            { icon: MapPin, title: "See it on the map", text: "Restaurants and authorised parking side by side, with walking routes." },
-            { icon: BrainCircuit, title: "AI explains the picks", text: "Top three restaurants ranked on availability, cost, walk and search time." },
-            { icon: ShieldCheck, title: "Authorised parking only", text: "Roadside and unverified spots are never suggested — no tow-away surprises." },
-          ].map((f) => (
-            <div key={f.title} className="rounded-2xl border border-border bg-card p-5 shadow-[var(--shadow-card)]">
-              <f.icon className="h-6 w-6 text-primary" />
-              <h3 className="mt-3 text-lg font-bold">{f.title}</h3>
-              <p className="mt-1 text-sm text-muted-foreground">{f.text}</p>
-            </div>
-          ))}
-        </div>
-        <div className="mt-8 flex justify-center">
-          <Button asChild variant="outline" size="lg">
-            <Link to="/recommendations" search={cleanSearch(form)}>
-              Skip to AI recommendations <Sparkles />
-            </Link>
-          </Button>
-        </div>
-      </section>
       <SiteFooter />
     </div>
   );

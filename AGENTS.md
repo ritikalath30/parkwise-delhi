@@ -31,6 +31,10 @@ use the editor.
 
 ## Project rules
 
+- Journey is three stages: Search (`/`) → Explore (`/explore`, map + top-3 picks + parking comparison) → Plan (`/plan`). `/map` and `/recommendations` only redirect to `/explore`.
+- Eligibility filters (authorisation, preference, opening hours, walk, budget, availability floor) run BEFORE scoring. Cost and walking are scored on absolute scales, so budget and walk limit act purely as filters.
+- Parking Safety Score lives in pure `src/lib/safety.ts` from SYNTHETIC indicators in `data.ts`; it is a ranking factor only — authorisation stays a hard filter, and UI copy must never claim a facility is safe.
+- OSM walking distances come from one OSRM table request per area (`src/lib/walk-matrix.server.ts`, loaded by the Explore/Plan route loaders and the AI server function); when unavailable the engine falls back to straight line × 1.3 and labels it "est.".
 - Recommendation scoring lives in pure `src/lib/engine.ts` and is shared by the UI and the AI server function; the server recomputes picks so the AI only explains verified parking that passed every filter.
 - Sample data lives in `src/lib/data.ts`; parking with `verified: false` must never reach recommendations (covered by `src/test/recommend.test.ts`).
 - Trip criteria travel between screens as validated URL search params (`src/lib/search.ts`), so every screen is shareable and needs no login or storage.

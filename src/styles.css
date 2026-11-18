@@ -178,7 +178,8 @@
   color: var(--dine-foreground);
 }
 .pw-pin-dine svg { width: 15px; height: 15px; }
-.pw-pin-dine.is-dim { opacity: 0.45; filter: grayscale(0.6); }
+.pw-pin-dine.is-dim,
+.pw-pin-park.is-dim { opacity: 0.45; filter: grayscale(0.6); }
 .pw-pin-park {
   width: 34px; height: 34px;
   border-radius: 9px;

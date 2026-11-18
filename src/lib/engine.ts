@@ -1,4 +1,9 @@
 import { getArea, type Area, type AreaId, type Parking, type Restaurant } from "./data";
+import { evaluateSafety, type SafetyEval } from "./safety";
+
+/** OSM walking-route distances in metres, keyed `${parkingId}>${restaurantId}`. */
+export type RouteMatrix = Record<string, number>;
+export const routeKey = (parkingId: string, restaurantId: string) => `${parkingId}>${restaurantId}`;
 
 export type ParkingPref = "free" | "both" | "paid";
 
@@ -30,12 +35,15 @@ export type ParkingEval = {
   searchMin: number;
   status: ParkingStatus;
   open: boolean;
+  safety: SafetyEval;
 };
 
 export type Option = {
   park: ParkingEval;
-  /** Estimated walking-route distance (straight line × street factor) */
+  /** Walking distance used for filtering and scoring: OSM route when available, else estimate. */
   walkM: number;
+  /** "route" = OpenStreetMap walking route; "estimate" = straight line × 1.3 street factor. */
+  walkSource: "route" | "estimate";
   /** Great-circle (haversine) distance */
   straightM: number;
   walkMin: number;
@@ -66,12 +74,18 @@ export type AreaEval = {
   excluded: Parking[];
 };
 
-export type FactorKey = "availability" | "cost" | "walk" | "search" | "authorisation";
+export type FactorKey = "availability" | "safety" | "walk" | "cost" | "search" | "authorisation";
 export type Weights = Record<FactorKey, number>;
 
-/** Base GeoAI weights (sum = 1). "Paid is acceptable" shifts weight from cost to convenience. */
-export const WEIGHTS: Weights = { availability: 0.32, cost: 0.23, walk: 0.23, search: 0.15, authorisation: 0.07 };
-export const PAID_OK_WEIGHTS: Weights = { availability: 0.38, cost: 0.1, walk: 0.28, search: 0.17, authorisation: 0.07 };
+/**
+ * GeoAI weights (sum = 1), applied only AFTER eligibility filtering. Cost and walking are
+ * scored on absolute scales (area price range, 1 km), so the user's budget and walk limit act
+ * purely as filters. "Paid is acceptable" shifts weight from cost to convenience and safety.
+ */
+export const WEIGHTS: Weights = { availability: 0.27, safety: 0.18, walk: 0.2, cost: 0.15, search: 0.12, authorisation: 0.08 };
+export const PAID_OK_WEIGHTS: Weights = { availability: 0.3, safety: 0.2, walk: 0.23, cost: 0.05, search: 0.14, authorisation: 0.08 };
+/** Walking distance at which the walk factor reaches zero. */
+export const WALK_SCALE_M = 1000;
 export function weightsFor(pref: ParkingPref): Weights {
   return pref === "paid" ? PAID_OK_WEIGHTS : WEIGHTS;
 }
@@ -153,32 +167,38 @@ export function evaluateParking(area: Area, p: Parking, c: Criteria): ParkingEva
       : availabilityPct >= 15
         ? "limited"
         : "scarce";
-  return { parking: p, occupancy, availabilityPct, freeSpots, cost: parkingCost(p, c.hours), searchMin, status, open };
+  return { parking: p, occupancy, availabilityPct, freeSpots, cost: parkingCost(p, c.hours), searchMin, status, open, safety: evaluateSafety(p) };
 }
 
-function scoreOption(pe: ParkingEval, walkM: number, c: Criteria) {
+function scoreOption(pe: ParkingEval, walkM: number, c: Criteria, maxCost: number) {
   const W = weightsFor(c.pref);
   const authorisation = pe.parking.authorisation === "authorised" ? 1 : 0.6;
   const availability = pe.open ? pe.availabilityPct / 100 : 0;
-  const cost = c.budget > 0 ? Math.max(0, 1 - pe.cost / c.budget) : pe.cost === 0 ? 1 : 0;
-  const walk = Math.max(0, 1 - walkM / Math.max(c.walk, 1));
+  // Cost relative to the most expensive authorised facility in the area for this stay —
+  // independent of the user's budget, which is applied as a filter instead.
+  const cost = maxCost > 0 ? Math.max(0, 1 - pe.cost / maxCost) : 1;
+  const walk = Math.max(0, 1 - walkM / WALK_SCALE_M);
   const search = Math.max(0, 1 - Math.min(pe.searchMin, 20) / 20);
-  const breakdown = { availability, cost, walk, search, authorisation };
+  const safety = pe.safety.score / 100;
+  const breakdown = { availability, safety, walk, cost, search, authorisation };
   const score = 100 * (Object.keys(W) as FactorKey[]).reduce((t, k) => t + W[k] * breakdown[k], 0);
   return { score: Math.round(score), breakdown, weights: W };
 }
 
-export function evaluateArea(c: Criteria): AreaEval {
+export function evaluateArea(c: Criteria, routes?: RouteMatrix | null): AreaEval {
   const area = getArea(c.area);
   // Rule: unverified / unauthorised parking is never evaluated or recommended.
   const verified = area.parkings.filter(isRecommendable);
   const excluded = area.parkings.filter((p) => !isRecommendable(p));
   const parkings = verified.map((p) => evaluateParking(area, p, c));
+  const maxCost = Math.max(0, ...parkings.map((p) => p.cost));
 
   const restaurants = area.restaurants.map<RestaurantEval>((r) => {
     const options = parkings
       .map<Option>((pe) => {
-        const walkM = walkingDistanceM(r, pe.parking);
+        const routeM = routes?.[routeKey(pe.parking.id, r.id)];
+        const walkSource = routeM !== undefined ? ("route" as const) : ("estimate" as const);
+        const walkM = routeM !== undefined ? Math.round(routeM / 10) * 10 : walkingDistanceM(r, pe.parking);
         const straightM = Math.round(haversineM(r, pe.parking) / 10) * 10;
         const issues: string[] = [];
         const blockers: Blocker[] = [];
@@ -199,7 +219,7 @@ export function evaluateArea(c: Criteria): AreaEval {
           blockers.push(opensLater || start >= pe.parking.openTo ? "hours" : "stay");
         }
         if (walkM > c.walk) {
-          issues.push(`Walk ${walkM} m exceeds your ${c.walk} m limit`);
+          issues.push(`Walk ${walkM} m${walkSource === "route" ? " (OSM route)" : " (est.)"} exceeds your ${c.walk} m limit`);
           blockers.push("walk");
         }
         if (pe.cost > c.budget) {
@@ -214,10 +234,11 @@ export function evaluateArea(c: Criteria): AreaEval {
           );
           blockers.push("full");
         }
-        const { score, breakdown, weights } = scoreOption(pe, walkM, c);
+        const { score, breakdown, weights } = scoreOption(pe, walkM, c, maxCost);
         return {
           park: pe,
           walkM,
+          walkSource,
           straightM,
           weights,
           walkMin: Math.max(1, Math.round(walkM / WALK_SPEED_M_PER_MIN)),
@@ -242,8 +263,8 @@ export function evaluateArea(c: Criteria): AreaEval {
   };
 }
 
-export function topRecommendations(c: Criteria, n = 3) {
-  const ev = evaluateArea(c);
+export function topRecommendations(c: Criteria, n = 3, routes?: RouteMatrix | null) {
+  const ev = evaluateArea(c, routes);
   const ranked = ev.restaurants
     .filter((r) => r.eligible && r.best)
     .sort((a, b) => b.best!.score - a.best!.score || b.restaurant.rating - a.restaurant.rating);
@@ -252,6 +273,7 @@ export function topRecommendations(c: Criteria, n = 3) {
 
 const FACTOR_LABEL: Record<FactorKey, string> = {
   availability: "simulated availability",
+  safety: "safety indicators",
   cost: "parking cost",
   walk: "walking distance",
   search: "search time",
@@ -273,6 +295,8 @@ function describeFactor(k: FactorKey, a: Option, b: Option) {
       if (a.park.cost === 0 && b.park.cost > 0) return `free parking versus ₹${b.park.cost}`;
       if (b.park.cost === 0 && a.park.cost > 0) return `₹${a.park.cost} parking versus free`;
       return `₹${Math.abs(a.park.cost - b.park.cost)} ${a.park.cost < b.park.cost ? "cheaper" : "dearer"} parking`;
+    case "safety":
+      return `${Math.abs(a.park.safety.score - b.park.safety.score)} points ${a.park.safety.score > b.park.safety.score ? "higher" : "lower"} parking safety score`;
     case "authorisation":
       return a.park.parking.authorisation === "authorised" ? "a fully authorised facility versus shared parking" : "shared (owner-permitted) parking versus an authorised facility";
     case "walk":

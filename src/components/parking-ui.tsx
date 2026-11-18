@@ -1,5 +1,6 @@
 import { Link } from "@tanstack/react-router";
-import { CalendarDays, Clock, Footprints, IndianRupee, MapPin, Pencil, ShieldCheck, Tag, Timer } from "lucide-react";
+import { CalendarDays, Check, Clock, Footprints, IndianRupee, MapPin, Minus, Pencil, Shield, ShieldCheck, Tag, Timer } from "lucide-react";
+import { SAFETY_BAND_LABEL, type SafetyEval } from "@/lib/safety";
 import { getArea } from "@/lib/data";
 import { formatTime, statusLabel, toCriteriaSafe, type ParkingStatus } from "@/lib/ui-helpers";
 import { PREF_OPTIONS, type CriteriaSearch } from "@/lib/search";
@@ -97,7 +98,7 @@ export function AuthStatus({ authorisation, operator, className }: { authorisati
   return (
     <span className={cn("inline-flex items-center gap-1 text-[11px] font-semibold text-ok", className)}>
       <ShieldCheck className="h-3 w-3 shrink-0" />
-      {shared ? "Shared · owner permission verified" : "Verified authorised"} · {operator}
+      {shared ? "Owner permission verified" : "Verified authorised"} · {operator}
     </span>
   );
 }
@@ -119,6 +120,38 @@ export function PrefToggle({ value, onChange, className }: { value: string; onCh
         >
           {o.label}
         </button>
+      ))}
+    </div>
+  );
+}
+
+const SAFETY_CLASS = {
+  high: "bg-ok/15 text-ok border-ok/30",
+  moderate: "bg-warn/20 text-signal-foreground border-warn/40",
+  limited: "bg-busy/15 text-busy border-busy/30",
+} as const;
+
+/** Parking Safety Score chip. Indicators are synthetic — never a claim that a facility is safe. */
+export function SafetyBadge({ safety, className, long = false }: { safety: SafetyEval; className?: string | undefined; long?: boolean }) {
+  return (
+    <span
+      title={`${SAFETY_BAND_LABEL[safety.band]} · synthetic prototype indicators, not a safety guarantee`}
+      className={cn("inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full border px-2 py-0.5 text-xs font-semibold", SAFETY_CLASS[safety.band], className)}
+    >
+      <Shield className="h-3 w-3" />
+      {long ? `${SAFETY_BAND_LABEL[safety.band]} · ${safety.score}` : `Safety ${safety.score}`}
+    </span>
+  );
+}
+
+export function SafetyAttributes({ safety, className }: { safety: SafetyEval; className?: string | undefined }) {
+  return (
+    <div className={cn("flex flex-wrap gap-1", className)}>
+      {safety.attributes.map((a) => (
+        <span key={a.label} className={cn("inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[10px] font-medium", a.ok ? "bg-ok/10 text-ok" : "bg-muted text-muted-foreground")}>
+          {a.ok ? <Check className="h-2.5 w-2.5" /> : <Minus className="h-2.5 w-2.5" />}
+          {a.label}
+        </span>
       ))}
     </div>
   );

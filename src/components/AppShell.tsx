@@ -6,9 +6,8 @@ import { cn } from "@/lib/utils";
 
 const STEPS = [
   { to: "/", label: "Search", n: 1 },
-  { to: "/map", label: "Map", n: 2 },
-  { to: "/recommendations", label: "AI picks", n: 3 },
-  { to: "/plan", label: "Plan", n: 4 },
+  { to: "/explore", label: "Explore", n: 2 },
+  { to: "/plan", label: "Plan", n: 3 },
 ] as const;
 
 export function Logo({ light = false }: { light?: boolean }) {
@@ -29,7 +28,7 @@ export function SimulatedNotice({ className }: { className?: string | undefined 
     <div className={cn("flex items-start gap-2 rounded-xl border border-signal/50 bg-signal/15 px-3 py-2 text-xs text-signal-foreground", className)}>
       <FlaskConical className="mt-0.5 h-3.5 w-3.5 shrink-0" />
       <p>
-        <strong>Prototype:</strong> parking availability is <strong>simulated</strong> from typical demand patterns — it is not live data. Restaurants, parking and prices are illustrative sample data.
+        <strong>Prototype data.</strong> Availability and safety indicators are <strong>simulated</strong> estimates, not live data. Restaurants, facilities and prices are synthetic samples. Maps and walking routes: © OpenStreetMap contributors.
       </p>
     </div>
   );
@@ -89,7 +88,7 @@ export function SiteFooter() {
         </div>
         <div className="flex items-center gap-2 text-ink-foreground/70">
           <ShieldCheck className="h-4 w-4 text-ok" />
-          Only authorised, verified parking is ever recommended. Availability is simulated.
+          Only authorised or owner-permitted parking is recommended. Availability and safety are simulated.
         </div>
       </div>
     </footer>

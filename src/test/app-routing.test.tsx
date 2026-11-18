@@ -15,3 +15,11 @@ describe("App routing", () => {
     expect(matches.at(-1)?.routeId).not.toBe(rootRouteId);
   });
 });
+
+describe("Three-stage journey routes", () => {
+  it("matches /explore and /plan", () => {
+    const router = createRouter({ routeTree, context: { queryClient: new QueryClient() } });
+    expect(router.matchRoutes("/explore").at(-1)?.routeId).toBe("/explore");
+    expect(router.matchRoutes("/plan").at(-1)?.routeId).toBe("/plan");
+  });
+});
