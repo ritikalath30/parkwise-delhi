@@ -1,7 +1,7 @@
 import { fallback } from "@tanstack/zod-adapter";
 import { z } from "zod";
 import { AREAS, type AreaId } from "./data";
-import type { Criteria, DayType, ParkingPref } from "./engine";
+import { formatTime, topRecommendations, type Criteria, type DayType, type ParkingPref } from "./engine";
 
 export const criteriaSearchSchema = z.object({
   area: fallback(z.string(), "hkv").default("hkv"),
@@ -60,4 +60,54 @@ export function cleanSearch(s: CriteriaInput): CriteriaSearch {
   const hh = String(Math.floor(c.arrival / 60)).padStart(2, "0");
   const mm = String(c.arrival % 60).padStart(2, "0");
   return { area: c.area, time: `${hh}:${mm}`, day: c.day, hours: c.hours, budget: c.budget, walk: c.walk, pref: c.pref };
+}
+
+export type FixSuggestion = { label: string; patch: Partial<CriteriaSearch>; results: number };
+
+const hhmm = (m: number) => `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
+
+/**
+ * One-step changes that would make at least one restaurant fit, verified by re-running the
+ * ranking engine for each candidate. Used by empty states instead of generic advice.
+ */
+export function suggestFixes(s: CriteriaInput, max = 3): FixSuggestion[] {
+  const base = cleanSearch(s);
+  const c = toCriteria(base);
+  const count = (patch: Partial<CriteriaSearch>) => topRecommendations(toCriteria({ ...base, ...patch }), 3).rankedCount;
+  const out: FixSuggestion[] = [];
+  const tryFirst = (cands: { label: string; patch: Partial<CriteriaSearch> }[]) => {
+    for (const cand of cands) {
+      const results = count(cand.patch);
+      if (results > 0) {
+        out.push({ ...cand, results });
+        return;
+      }
+    }
+  };
+
+  if (c.pref === "free") tryFirst([{ label: "Include paid parking", patch: { pref: "both" } }]);
+  tryFirst(
+    Array.from({ length: c.hours - 1 }, (_, i) => c.hours - 1 - i).map((h) => ({
+      label: `Shorten stay to ${h} h`,
+      patch: { hours: h },
+    })),
+  );
+  tryFirst(
+    [60, 120, 180]
+      .filter((d) => c.arrival - d >= 0)
+      .map((d) => ({ label: `Arrive at ${formatTime(c.arrival - d)}`, patch: { time: hhmm(c.arrival - d) } })),
+  );
+  tryFirst(
+    [300, 600, 900]
+      .map((d) => Math.min(WALK_RANGE.max, c.walk + d))
+      .filter((w, i, a) => w > c.walk && a.indexOf(w) === i)
+      .map((w) => ({ label: `Allow ${w} m walk`, patch: { walk: w } })),
+  );
+  tryFirst(
+    [50, 100, 200]
+      .map((d) => Math.min(BUDGET_RANGE.max, c.budget + d))
+      .filter((b, i, a) => b > c.budget && a.indexOf(b) === i)
+      .map((b) => ({ label: `Raise budget to ₹${b}`, patch: { budget: b } })),
+  );
+  return out.sort((a, b) => b.results - a.results).slice(0, max);
 }

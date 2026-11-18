@@ -31,7 +31,7 @@ export const Route = createFileRoute("/")({
 
 const PRESETS: { label: string; s: CriteriaSearch }[] = [
   { label: "Saturday dinner · HKV · 8 pm", s: { area: "hkv", time: "20:00", day: "weekend", hours: 2, budget: 150, walk: 600, pref: "both" } },
-  { label: "Weekday lunch · Khan Market · free parking", s: { area: "khan", time: "13:00", day: "weekday", hours: 1, budget: 80, walk: 400, pref: "free" } },
+  { label: "Weekday lunch · Khan Market · free parking", s: { area: "khan", time: "13:00", day: "weekday", hours: 1, budget: 80, walk: 800, pref: "free" } },
   { label: "Sunday coffee · CP · 11 am · paid OK", s: { area: "cp", time: "11:00", day: "weekend", hours: 2, budget: 100, walk: 800, pref: "paid" } },
 ];
 
@@ -105,7 +105,7 @@ function SearchScreen() {
 
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-2">
-                  <Label htmlFor="time" className="flex items-center gap-1.5"><Clock className="h-4 w-4 text-primary" /> Arrival time</Label>
+                  <Label htmlFor="time" className="flex items-center gap-1.5"><Clock className="h-4 w-4 text-primary" /> Arrive at parking</Label>
                   <Input id="time" type="time" required value={form.time} onChange={(e) => set("time", e.target.value)} className="h-11" />
                 </div>
                 <div className="space-y-2">

@@ -11,8 +11,8 @@ import { TripAdjuster } from "@/components/TripAdjuster";
 import { topRecommendations } from "@/lib/engine";
 import { ruleBasedExplanation } from "@/lib/explain";
 import { explainRecommendations } from "@/lib/recommend.functions";
-import { cleanSearch, criteriaSearchSchema, toCriteria } from "@/lib/search";
-import { PRICE_LABEL } from "@/lib/ui-helpers";
+import { cleanSearch, criteriaSearchSchema, suggestFixes, toCriteria } from "@/lib/search";
+import { chargesText, PRICE_LABEL } from "@/lib/ui-helpers";
 
 export const Route = createFileRoute("/recommendations")({
   validateSearch: zodValidator(criteriaSearchSchema),
@@ -43,6 +43,7 @@ function RecommendationsScreen() {
   const c = toCriteria(search);
   const rec = topRecommendations(c, 3);
   const rules = ruleBasedExplanation(c);
+  const fixes = rec.top.length === 0 ? suggestFixes(search) : [];
   const explain = useServerFn(explainRecommendations);
 
   // Wait for the user to stop adjusting before asking the AI again.
@@ -96,9 +97,20 @@ function RecommendationsScreen() {
             <Car className="mx-auto h-8 w-8 text-muted-foreground" />
             <h2 className="mt-3 text-lg font-bold">No restaurant fits these limits</h2>
             <p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">
-              {rules.summary} Try a higher budget, a longer walk or a different parking preference.
+              {rules.summary}
             </p>
-            <Button asChild className="mt-4"><Link to="/" search={search}>Adjust search</Link></Button>
+            {fixes.length > 0 ? (
+              <div className="mt-4 flex flex-wrap justify-center gap-2">
+                {fixes.map((f) => (
+                  <Button key={f.label} size="sm" onClick={() => update(f.patch)}>
+                    {f.label} <span className="font-normal opacity-80">· {f.results} fit</span>
+                  </Button>
+                ))}
+              </div>
+            ) : (
+              <p className="mt-2 text-xs text-muted-foreground">No single change makes a restaurant fit — try a different area or time.</p>
+            )}
+            <Button asChild variant="outline" size="sm" className="mt-3"><Link to="/" search={search}>Adjust search</Link></Button>
           </div>
         ) : (
           <>
@@ -156,6 +168,10 @@ function RecommendationsScreen() {
                         <div className="mt-0.5 flex flex-wrap items-center gap-1.5"><AccessBadge access={o.park.parking.access} /><AuthStatus authorisation={o.park.parking.authorisation} operator={o.park.parking.operator} /></div>
                       </div>
                     </div>
+
+                    <p className="mt-2 text-[11px] text-muted-foreground">
+                      Charges: {o.park.parking.access === "free" ? "free (₹0)" : `${chargesText(o.park.parking)} · illustrative`}
+                    </p>
 
                     <div className="mt-3 grid grid-cols-2 gap-2">
                       <Stat icon={Car} label="Availability" value={`${o.park.availabilityPct}%`} sub={`~${o.park.freeSpots} spots · simulated`} />
@@ -235,7 +251,7 @@ function RecommendationsScreen() {
           <SimulatedNotice />
           <div className="flex items-start gap-2 rounded-xl border border-ok/30 bg-ok/10 px-3 py-2 text-xs">
             <ShieldCheck className="mt-0.5 h-3.5 w-3.5 shrink-0 text-ok" />
-            <p>Only authorised, verified parking facilities are considered.{rec.excludedUnverified > 0 && ` ${rec.excludedUnverified} unverified roadside spot was excluded.`}</p>
+            <p>Only authorised facilities and owner-permitted shared parking are considered.{rec.excludedUnverified > 0 && ` ${rec.excludedUnverified} restricted or unverified space${rec.excludedUnverified > 1 ? "s were" : " was"} excluded.`}</p>
           </div>
         </div>
         {rec.top.length > 0 && <AvailabilityLegend />}

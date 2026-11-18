@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { evaluateArea, topRecommendations } from "@/lib/engine";
-import { toCriteria } from "@/lib/search";
+import { evaluateArea, minFreeSpots, topRecommendations } from "@/lib/engine";
+import { suggestFixes, toCriteria } from "@/lib/search";
 
 const base = toCriteria({ area: "hkv", time: "20:00", day: "weekend", hours: 2, budget: 150, walk: 600 });
 
@@ -57,7 +57,10 @@ describe("ParkWise data consistency", () => {
   it("keeps every score between 0 and 100 and ranks picks best-first", () => {
     const rec = topRecommendations({ ...base, budget: 400, walk: 1500 });
     const scores = rec.top.map((r) => r.best!.score);
-    for (const s of scores) expect(s).toBeGreaterThanOrEqual(0), expect(s).toBeLessThanOrEqual(100);
+    for (const s of scores) {
+      expect(s).toBeGreaterThanOrEqual(0);
+      expect(s).toBeLessThanOrEqual(100);
+    }
     expect([...scores].sort((a, b) => b - a)).toEqual(scores);
   });
 
@@ -79,7 +82,8 @@ describe("ParkWise data consistency", () => {
 
 describe("parking preference", () => {
   it("free-only recommends only verified ₹0 parking", () => {
-    const rec = topRecommendations({ ...base, pref: "free", walk: 1500 });
+    const offPeak = toCriteria({ area: "hkv", time: "13:00", day: "weekday", hours: 2, budget: 150, walk: 1500, pref: "free" });
+    const rec = topRecommendations(offPeak);
     expect(rec.top.length).toBeGreaterThan(0);
     for (const r of rec.top) {
       expect(r.best!.park.cost).toBe(0);
@@ -102,5 +106,55 @@ describe("parking preference", () => {
 
   it("reports straight-line distance no greater than the estimated walking route", () => {
     for (const r of evaluateArea(base).restaurants) for (const o of r.options) expect(o.straightM).toBeLessThanOrEqual(o.walkM);
+  });
+});
+
+describe("availability floor", () => {
+  it("never recommends a facility expected to be nearly full", () => {
+    for (const area of ["hkv", "khan", "cp"])
+      for (const time of ["09:00", "13:00", "19:30", "20:00", "21:00"])
+        for (const pref of ["free", "both", "paid"] as const) {
+          const rec = topRecommendations(toCriteria({ area, time, day: "weekend", hours: 2, budget: 400, walk: 1500, pref }));
+          for (const r of rec.top) expect(r.best!.park.freeSpots).toBeGreaterThanOrEqual(minFreeSpots(r.best!.park.parking));
+        }
+  });
+
+  it("explains why a nearly full facility was rejected", () => {
+    const ev = evaluateArea({ ...base, pref: "free", walk: 1500 });
+    const fort = ev.restaurants[0]!.options.find((o) => o.park.parking.id === "hkv-f-fort")!;
+    expect(fort.eligible).toBe(false);
+    expect(fort.blockers).toContain("full");
+    expect(fort.issues.join(" ")).toMatch(/Nearly full|full/);
+  });
+});
+
+describe("dynamic recommendations", () => {
+  const key = (c: Parameters<typeof topRecommendations>[0]) =>
+    topRecommendations(c).top.map((r) => `${r.restaurant.id}:${r.best!.park.parking.id}:${r.best!.score}`).join("|");
+  const c0 = toCriteria({ area: "hkv", time: "13:00", day: "weekday", hours: 2, budget: 150, walk: 600, pref: "both" });
+
+  it("changes when preference, budget, arrival time or walking limit change", () => {
+    expect(key({ ...c0, pref: "free", walk: 1500 })).not.toBe(key(c0));
+    expect(key({ ...c0, budget: 30 })).not.toBe(key(c0));
+    expect(key({ ...c0, arrival: 20 * 60 })).not.toBe(key(c0));
+    expect(key({ ...c0, walk: 250 })).not.toBe(key(c0));
+  });
+});
+
+describe("fix suggestions", () => {
+  it("only suggests changes that actually produce results", () => {
+    const s = { area: "hkv", time: "23:00", day: "weekend", hours: 2, budget: 150, walk: 600, pref: "both" };
+    const fixes = suggestFixes(s);
+    expect(fixes.length).toBeGreaterThan(0);
+    for (const f of fixes) expect(topRecommendations(toCriteria({ ...s, ...f.patch })).rankedCount).toBeGreaterThan(0);
+  });
+
+  it("every homepage-style preset returns at least one restaurant", () => {
+    const presets = [
+      { area: "hkv", time: "20:00", day: "weekend", hours: 2, budget: 150, walk: 600, pref: "both" },
+      { area: "khan", time: "13:00", day: "weekday", hours: 1, budget: 80, walk: 800, pref: "free" },
+      { area: "cp", time: "11:00", day: "weekend", hours: 2, budget: 100, walk: 800, pref: "paid" },
+    ];
+    for (const p of presets) expect(topRecommendations(toCriteria(p)).top.length).toBeGreaterThan(0);
   });
 });

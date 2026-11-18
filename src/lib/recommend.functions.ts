@@ -2,7 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { generateResponse, GatewayError } from "@lovable.dev/ai-gateway";
 import { z } from "zod";
 import { formatTime, topRecommendations } from "./engine";
-import { ruleBasedExplanation } from "./explain";
+import { collectNumbers, numbersGrounded, ruleBasedExplanation } from "./explain";
 import { toCriteria } from "./search";
 
 const inputSchema = z.object({
@@ -95,12 +95,28 @@ export const explainRecommendations = createServerFn({ method: "POST" })
         }
       }
       const parsed = outputSchema.parse(JSON.parse(text));
+      // Any figure the AI writes must come from the facts it was given; otherwise that piece
+      // falls back to the rule-based wording so explanations never contradict the numbers.
+      const allowed = collectNumbers([facts, context, rules]);
+      let rejected = 0;
       // Keep the rule-based order and rank reasons; take AI wording only for known ids.
       const picks = rules.picks.map((rp) => {
         const ai = parsed.picks.find((p) => p.id === rp.id);
-        return ai ? { ...ai, id: rp.id, rankReason: rp.rankReason, tradeoff: rp.tradeoff } : rp;
+        if (!ai) return rp;
+        if (![ai.headline, ai.reasoning, ai.tip].every((t) => numbersGrounded(t, allowed))) {
+          rejected++;
+          return rp;
+        }
+        return { ...ai, id: rp.id, rankReason: rp.rankReason, tradeoff: rp.tradeoff };
       });
-      return { source: "ai", summary: parsed.summary, picks };
+      const summaryOk = numbersGrounded(parsed.summary, allowed);
+      if (!summaryOk) rejected++;
+      return {
+        source: "ai",
+        summary: summaryOk ? parsed.summary : rules.summary,
+        picks,
+        ...(rejected > 0 && { note: `${rejected} AI passage${rejected > 1 ? "s" : ""} cited figures not in the ranking data and ${rejected > 1 ? "were" : "was"} replaced with rule-based wording.` }),
+      };
     } catch (err) {
       if (err instanceof GatewayError) {
         console.error("AI explanation failed", err.code, err.httpStatus, err.ids);

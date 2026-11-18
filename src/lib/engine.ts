@@ -44,7 +44,11 @@ export type Option = {
   weights: Weights;
   eligible: boolean;
   issues: string[];
+  /** Machine-readable reasons the option is ineligible (parallel to `issues`). */
+  blockers: Blocker[];
 };
+
+export type Blocker = "pref" | "hours" | "stay" | "walk" | "budget" | "full";
 
 export type RestaurantEval = {
   restaurant: Restaurant;
@@ -76,6 +80,14 @@ export function weightsFor(pref: ParkingPref): Weights {
 export function isRecommendable(p: Parking) {
   return p.authorisation === "authorised" || p.authorisation === "shared-permission";
 }
+/**
+ * A facility is only recommendable if enough spots are expected to be free that the user
+ * has a realistic chance of getting one: at least 3 spots and 5% of capacity.
+ */
+export function minFreeSpots(p: Parking) {
+  return Math.max(3, Math.ceil(p.capacity * 0.05));
+}
+
 const WALK_SPEED_M_PER_MIN = 75;
 const ROUTE_FACTOR = 1.3; // street network vs straight line
 
@@ -169,18 +181,39 @@ export function evaluateArea(c: Criteria): AreaEval {
         const walkM = walkingDistanceM(r, pe.parking);
         const straightM = Math.round(haversineM(r, pe.parking) / 10) * 10;
         const issues: string[] = [];
-        if (c.pref === "free" && pe.cost > 0) issues.push(`Paid (₹${pe.cost}) — excluded by your free-only preference`);
+        const blockers: Blocker[] = [];
+        if (c.pref === "free" && pe.cost > 0) {
+          issues.push(`Paid (₹${pe.cost}) — excluded by your free-only preference`);
+          blockers.push("pref");
+        }
         if (!pe.open) {
           const start = c.arrival / 60;
+          const opensLater = start < pe.parking.openFrom;
           issues.push(
-            start < pe.parking.openFrom
+            opensLater
               ? `Opens at ${formatHour(pe.parking.openFrom)}, after you arrive`
-              : `Closes at ${formatHour(pe.parking.openTo)}, before your ${c.hours} h stay ends`,
+              : start >= pe.parking.openTo
+                ? `Closed at your arrival time (open ${formatHour(pe.parking.openFrom)} – ${formatHour(pe.parking.openTo)})`
+                : `Closes at ${formatHour(pe.parking.openTo)}, before your ${c.hours} h stay ends`,
           );
+          blockers.push(opensLater || start >= pe.parking.openTo ? "hours" : "stay");
         }
-        if (walkM > c.walk) issues.push(`Walk ${walkM} m exceeds your ${c.walk} m limit`);
-        if (pe.cost > c.budget) issues.push(`₹${pe.cost} exceeds your ₹${c.budget} budget`);
-        if (pe.open && pe.freeSpots === 0) issues.push("Expected to be full");
+        if (walkM > c.walk) {
+          issues.push(`Walk ${walkM} m exceeds your ${c.walk} m limit`);
+          blockers.push("walk");
+        }
+        if (pe.cost > c.budget) {
+          issues.push(`₹${pe.cost} exceeds your ₹${c.budget} budget`);
+          blockers.push("budget");
+        }
+        if (pe.open && pe.freeSpots < minFreeSpots(pe.parking)) {
+          issues.push(
+            pe.freeSpots === 0
+              ? "Expected to be full (simulated)"
+              : `Nearly full — only ~${pe.freeSpots} spot${pe.freeSpots === 1 ? "" : "s"} expected (simulated)`,
+          );
+          blockers.push("full");
+        }
         const { score, breakdown, weights } = scoreOption(pe, walkM, c);
         return {
           park: pe,
@@ -192,6 +225,7 @@ export function evaluateArea(c: Criteria): AreaEval {
           breakdown,
           eligible: issues.length === 0,
           issues,
+          blockers,
         };
       })
       .sort((a, b) => Number(b.eligible) - Number(a.eligible) || b.score - a.score);

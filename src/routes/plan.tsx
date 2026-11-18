@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { formatTime, topRecommendations } from "@/lib/engine";
-import { cleanSearch, criteriaSearchSchema, DEFAULT_SEARCH, toCriteria } from "@/lib/search";
+import { cleanSearch, criteriaSearchSchema, DEFAULT_SEARCH, suggestFixes, toCriteria } from "@/lib/search";
 import { chargesText, directionsUrl, hoursText, PRICE_LABEL, walkingUrl } from "@/lib/ui-helpers";
 import { cn } from "@/lib/utils";
 
@@ -43,6 +43,7 @@ function PlanScreen() {
   const navigate = useNavigate({ from: "/plan" });
   const c = toCriteria(search);
   const rec = topRecommendations(c, 3);
+  const fixes = rec.top.length === 0 ? suggestFixes(search) : [];
 
   const eligible = rec.restaurants.filter((r) => r.eligible).sort((a, b) => b.best!.score - a.best!.score);
   const others = rec.restaurants.filter((r) => !r.eligible);
@@ -61,27 +62,24 @@ function PlanScreen() {
   const routeQ = useQuery({
     queryKey: ["walk-route", option?.park.parking.id, chosen?.restaurant.id],
     queryFn: () =>
-      fetchRoute({
-        data: {
-          from: { lat: option!.park.parking.lat, lng: option!.park.parking.lng },
-          to: { lat: chosen!.restaurant.lat, lng: chosen!.restaurant.lng },
-        },
-      }),
+      fetchRoute({ data: { parkingId: option!.park.parking.id, restaurantId: chosen!.restaurant.id } }),
     enabled: !!option && !!chosen,
     staleTime: Infinity,
     retry: false,
   });
   const walkRoute = routeQ.data ?? null;
   const walkMinutes = walkRoute ? walkRoute.durationMin : (option?.walkMin ?? 0);
-  const leaveBy = (c.arrival - (option ? option.park.searchMin + walkMinutes : 0) + 1440) % 1440;
+  // Arrival = when you reach the parking (availability is predicted for that moment).
+  const seatedAt = (c.arrival + (option ? option.park.searchMin + walkMinutes : 0)) % 1440;
 
   const copyPlan = async () => {
     if (!chosen || !option) return;
     const text = [
       `ParkWise GeoAI plan — ${rec.area.name}`,
       `Restaurant: ${chosen.restaurant.name} (${chosen.restaurant.cuisine})`,
-      `Park at: ${option.park.parking.name} (authorised, ${option.park.parking.operator})`,
-      `Arrive: ${formatTime(c.arrival)} · ${c.day} · ${c.hours} h stay`,
+      `Park at: ${option.park.parking.name} (${option.park.parking.authorisation === "shared-permission" ? "shared, owner permission" : "authorised"}, ${option.park.parking.operator})`,
+      ...(option.park.parking.note ? [`Entry: ${option.park.parking.note}`] : []),
+      `Reach parking: ${formatTime(c.arrival)} · ${c.day} · ${c.hours} h stay · seated ~${formatTime(seatedAt)}`,
       `Est. parking cost: ${option.park.cost === 0 ? "FREE (₹0)" : `₹${option.park.cost} (illustrative)`} · ${option.park.parking.access.toUpperCase()}`,
       `Walk: ${walkRoute ? `${walkRoute.distanceM} m (OSM walking route)` : `~${option.walkM} m (estimate)`}, ${option.straightM} m straight line`,
       `Simulated availability: ${option.park.availabilityPct}% · ~${option.park.searchMin} min to find a spot`,
@@ -156,6 +154,15 @@ function PlanScreen() {
         {!chosen ? (
           <div className="mt-6 rounded-2xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
             No restaurants have authorised parking within your limits. <Link to="/" search={search} className="font-semibold text-primary">Adjust your search</Link>.
+            {fixes.length > 0 && (
+              <div className="mt-4 flex flex-wrap justify-center gap-2">
+                {fixes.map((f) => (
+                  <Button key={f.label} size="sm" onClick={() => navigate({ search: (prev) => ({ ...prev, ...cleanSearch({ ...prev, ...f.patch }), restaurant: "", parking: "" }), replace: true })}>
+                    {f.label} <span className="font-normal opacity-80">· {f.results} fit</span>
+                  </Button>
+                ))}
+              </div>
+            )}
           </div>
         ) : !option ? (
           <div className="mt-6 rounded-2xl border border-busy/30 bg-busy/10 p-6 text-sm">
@@ -207,7 +214,7 @@ function PlanScreen() {
                 <div className="mt-4 flex items-center gap-2 rounded-xl bg-accent/70 p-3 text-sm text-accent-foreground">
                   <CalendarClock className="h-4 w-4 shrink-0" />
                   <span>
-                    To be seated by <strong>{formatTime(c.arrival)}</strong>, reach the parking by <strong>{formatTime(leaveBy)}</strong>.
+                    Reach the parking at <strong>{formatTime(c.arrival)}</strong> and expect to be seated by about <strong>{formatTime(seatedAt)}</strong> (~{option.park.searchMin} min to park + ~{walkMinutes} min walk).
                   </span>
                 </div>
                 {option !== chosen.best && chosen.best && (
@@ -259,7 +266,7 @@ function PlanScreen() {
                   lng: o.park.parking.lng,
                   status: o.park.status,
                   popupLines: [
-                    `✓ Verified authorised · ${o.park.parking.operator}`,
+                    `${o.park.parking.authorisation === "shared-permission" ? "✓ Shared with verified owner permission" : "✓ Verified authorised"} · ${o.park.parking.operator}`,
                     `Simulated availability: ${o.park.availabilityPct}% (~${o.park.freeSpots} of ${o.park.parking.capacity} spots)`,
                     `₹${o.park.cost} for ${c.hours} h · ${o.walkM} m walk · ~${o.park.searchMin} min search`,
                   ],

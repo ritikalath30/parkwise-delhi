@@ -76,3 +76,25 @@ export function ruleBasedExplanation(c: Criteria): Explanation {
     }),
   };
 }
+
+/** Every number found in a value (including numbers embedded in strings), recursively. */
+export function collectNumbers(value: unknown, into = new Set<number>()): Set<number> {
+  if (typeof value === "number" && Number.isFinite(value)) into.add(value);
+  else if (typeof value === "string") for (const m of value.matchAll(/\d+(?:\.\d+)?/g)) into.add(Number(m[0]));
+  else if (Array.isArray(value)) for (const v of value) collectNumbers(v, into);
+  else if (value && typeof value === "object") for (const v of Object.values(value)) collectNumbers(v, into);
+  return into;
+}
+
+/**
+ * True when every number in `text` (other than small counts 0–10) appears in the facts the AI
+ * was given. Used to reject AI wording that invents or miscopies figures.
+ */
+export function numbersGrounded(text: string, allowed: Set<number>): boolean {
+  for (const m of text.replace(/,(?=\d{3})/g, "").matchAll(/\d+(?:\.\d+)?/g)) {
+    const n = Number(m[0]);
+    if (n <= 10) continue;
+    if (!allowed.has(n)) return false;
+  }
+  return true;
+}

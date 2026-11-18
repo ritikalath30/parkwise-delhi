@@ -12,6 +12,7 @@ export function walkingUrl(from: { lat: number; lng: number }, to: { lat: number
 }
 
 export function chargesText(p: { firstHour: number; perHourAfter: number; dailyMax?: number | undefined }) {
+  if (p.perHourAfter === 0) return `₹${p.firstHour} flat per visit`;
   return `₹${p.firstHour} first hour, then ₹${p.perHourAfter}/hr${p.dailyMax ? ` (max ₹${p.dailyMax})` : ""}`;
 }
 

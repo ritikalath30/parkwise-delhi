@@ -1,9 +1,14 @@
 # ParkWise GeoAI roadmap
 - [x] Review fixes: map clicks, AI summary, rank reasons, parking switching, consistency
-- [ ] Publish app publicly (needs user approval of publish card)
-- [ ] Free/paid/shared parking classification + preference filter (search, map, picks, plan)
-- [ ] Restricted / unverified layers on map, never recommended
-- [ ] Walking route distance (OSM) vs straight-line, clearly labelled
-- [ ] Duration-aware simulated demand
-- [ ] GeoAI scoring with preference + authorisation factor; free vs paid trade-off explanations (AI + fallback)
-- [ ] Tests + full journey browser check
+- [x] Publish app publicly (Vercel, auto-deploys from `main`)
+- [x] Free/paid/shared parking classification + preference filter (search, map, picks, plan)
+- [x] Restricted / unverified layers on map, never recommended
+- [x] Walking route distance (OSM) vs straight-line, clearly labelled — plan and map detail card
+- [x] Duration-aware simulated demand
+- [x] GeoAI scoring with preference + authorisation factor; free vs paid trade-off explanations (AI + fallback)
+- [x] Availability floor: nearly full facilities (< 3 spots or < 5% of capacity) are never recommended
+- [x] Verified one-tap fixes in empty states (each suggestion re-runs the engine)
+- [x] AI explanations rejected per passage if they cite figures not in the ranking data
+- [x] Tests + full journey browser check
+- [ ] Spread top picks across different car parks (avoid three picks sharing one nearly full lot)
+- [ ] Restaurant fit (rating, price, cuisine) as a ranking factor, not only a tie-breaker

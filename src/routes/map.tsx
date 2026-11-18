@@ -1,6 +1,8 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { zodValidator } from "@tanstack/zod-adapter";
 import { useEffect, useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
 import { ArrowRight, Ban, Car, Navigation, X, Footprints, IndianRupee, Search, ShieldCheck, Sparkles, Star, Timer, UtensilsCrossed } from "lucide-react";
 import { AppShell, SimulatedNotice } from "@/components/AppShell";
 import { MapView } from "@/components/MapView";
@@ -13,6 +15,7 @@ import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { evaluateArea } from "@/lib/engine";
+import { getWalkingRoute } from "@/lib/route.functions";
 import { BUDGET_RANGE, cleanSearch, criteriaSearchSchema, toCriteria, WALK_RANGE } from "@/lib/search";
 import { chargesText, directionsUrl, hoursText, PRICE_LABEL, walkingUrl } from "@/lib/ui-helpers";
 import { cn } from "@/lib/utils";
@@ -37,7 +40,7 @@ function MapScreen() {
   const search = cleanSearch(raw);
   const navigate = useNavigate({ from: "/map" });
   const c = toCriteria(search);
-  const ev = useMemo(() => evaluateArea(c), [c.area, c.arrival, c.day, c.hours, c.budget, c.walk]); // eslint-disable-line react-hooks/exhaustive-deps
+  const ev = useMemo(() => evaluateArea(c), [c.area, c.arrival, c.day, c.hours, c.budget, c.walk, c.pref]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const [showDine, setShowDine] = useState(true);
   const [layers, setLayers] = useState({ free: true, paid: true, shared: true, restricted: true });
@@ -115,12 +118,22 @@ function MapScreen() {
       : []),
   ];
 
+  // Real OSM walking route for the selected pair; falls back to a straight line while loading or if unavailable.
+  const fetchRoute = useServerFn(getWalkingRoute);
+  const routeQ = useQuery({
+    queryKey: ["walk-route", selectedOption?.park.parking.id, selected?.restaurant.id],
+    queryFn: () => fetchRoute({ data: { parkingId: selectedOption!.park.parking.id, restaurantId: selected!.restaurant.id } }),
+    enabled: !!selected && !!selectedOption,
+    staleTime: Infinity,
+    retry: false,
+  });
+  const walkRoute = selected && selectedOption ? (routeQ.data ?? null) : null;
   const route: [number, number][] | null =
     selected && selectedOption
-      ? [
+      ? (walkRoute?.coords ?? [
           [selectedOption.park.parking.lat, selectedOption.park.parking.lng],
           [selected.restaurant.lat, selected.restaurant.lng],
-        ]
+        ])
       : null;
 
   const isDesktop = () => typeof window !== "undefined" && window.matchMedia("(min-width: 1024px)").matches;
@@ -244,7 +257,7 @@ function MapScreen() {
                     <div className="mt-2 flex flex-wrap gap-2 text-xs">
                       <AvailabilityBadge status={selectedOption.park.status} pct={selectedOption.park.availabilityPct} />
                       <AccessBadge access={selectedOption.park.parking.access} />
-                      <span className="inline-flex items-center gap-1" title="Estimated walking route; straight-line distance in brackets"><Footprints className="h-3 w-3" />~{selectedOption.walkM} m ({selectedOption.straightM} m straight)</span>
+                      <span className="inline-flex items-center gap-1" title={walkRoute ? "OpenStreetMap walking route; straight-line distance in brackets" : "Estimated walking route (straight line × 1.3); straight-line distance in brackets"}><Footprints className="h-3 w-3" />{walkRoute ? `${walkRoute.distanceM} m OSM route` : `~${selectedOption.walkM} m est.`} ({selectedOption.straightM} m straight)</span>
                       <span className="inline-flex items-center gap-1"><IndianRupee className="h-3 w-3" />{selectedOption.park.cost}</span>
                       <span className="inline-flex items-center gap-1"><Timer className="h-3 w-3" />~{selectedOption.park.searchMin} min search</span>
                     </div>
