@@ -2,10 +2,13 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { fallback, zodValidator } from "@tanstack/zod-adapter";
 import { z } from "zod";
 import { toast } from "sonner";
+import { useQuery } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
+import { getWalkingRoute } from "@/lib/route.functions";
 import { ArrowRight, CalendarClock, Car, Check, Copy, Footprints, IndianRupee, Navigation, RotateCcw, ShieldCheck, Sparkles, Star, Timer, UtensilsCrossed } from "lucide-react";
 import { AppShell, SimulatedNotice } from "@/components/AppShell";
 import { MapView } from "@/components/MapView";
-import { AvailabilityBadge, CriteriaBar, Stat } from "@/components/parking-ui";
+import { AccessBadge, AvailabilityBadge, CriteriaBar, Stat } from "@/components/parking-ui";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -54,7 +57,23 @@ function PlanScreen() {
   const pick = (restaurant: string, parking = "") =>
     navigate({ search: (prev) => ({ ...prev, restaurant, parking }), replace: true, resetScroll: false });
 
-  const leaveBy = (c.arrival - (option ? option.park.searchMin + option.walkMin : 0) + 1440) % 1440;
+  const fetchRoute = useServerFn(getWalkingRoute);
+  const routeQ = useQuery({
+    queryKey: ["walk-route", option?.park.parking.id, chosen?.restaurant.id],
+    queryFn: () =>
+      fetchRoute({
+        data: {
+          from: { lat: option!.park.parking.lat, lng: option!.park.parking.lng },
+          to: { lat: chosen!.restaurant.lat, lng: chosen!.restaurant.lng },
+        },
+      }),
+    enabled: !!option && !!chosen,
+    staleTime: Infinity,
+    retry: false,
+  });
+  const walkRoute = routeQ.data ?? null;
+  const walkMinutes = walkRoute ? walkRoute.durationMin : (option?.walkMin ?? 0);
+  const leaveBy = (c.arrival - (option ? option.park.searchMin + walkMinutes : 0) + 1440) % 1440;
 
   const copyPlan = async () => {
     if (!chosen || !option) return;
@@ -63,8 +82,8 @@ function PlanScreen() {
       `Restaurant: ${chosen.restaurant.name} (${chosen.restaurant.cuisine})`,
       `Park at: ${option.park.parking.name} (authorised, ${option.park.parking.operator})`,
       `Arrive: ${formatTime(c.arrival)} · ${c.day} · ${c.hours} h stay`,
-      `Est. parking cost: ₹${option.park.cost}`,
-      `Walk: ${option.walkM} m (~${option.walkMin} min)`,
+      `Est. parking cost: ${option.park.cost === 0 ? "FREE (₹0)" : `₹${option.park.cost} (illustrative)`} · ${option.park.parking.access.toUpperCase()}`,
+      `Walk: ${walkRoute ? `${walkRoute.distanceM} m (OSM walking route)` : `~${option.walkM} m (estimate)`}, ${option.straightM} m straight line`,
       `Simulated availability: ${option.park.availabilityPct}% · ~${option.park.searchMin} min to find a spot`,
       `Drive to parking: ${directionsUrl(option.park.parking.lat, option.park.parking.lng)}`,
       `Walk to restaurant: ${walkingUrl(option.park.parking, chosen.restaurant)}`,
@@ -162,7 +181,8 @@ function PlanScreen() {
                     </div>
                     <h2 className="mt-1 text-2xl font-extrabold leading-tight">{option.park.parking.name}</h2>
                     <div className="mt-1 flex items-center gap-1.5 text-xs text-ink-foreground/75">
-                      <ShieldCheck className="h-3.5 w-3.5 text-ok" /> Authorised · {option.park.parking.operator} · {option.park.parking.kind}
+                      <AccessBadge access={option.park.parking.access} />
+                      <ShieldCheck className="h-3.5 w-3.5 text-ok" /> {option.park.parking.authorisation === "shared-permission" ? "Shared · owner permission verified" : "Verified authorised"} · {option.park.parking.operator} · {option.park.parking.kind}
                     </div>
                   </div>
                   <span className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl bg-gradient-signal font-display text-3xl font-extrabold text-signal-foreground">P</span>
@@ -174,8 +194,13 @@ function PlanScreen() {
               </div>
               <div className="p-5">
                 <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                  <Stat icon={IndianRupee} label="Estimated cost" value={`₹${option.park.cost}`} sub={`${c.hours} h · ₹${option.park.parking.firstHour} first hr`} />
-                  <Stat icon={Footprints} label="Walking" value={`${option.walkM} m`} sub={`~${option.walkMin} min`} />
+                  <Stat icon={IndianRupee} label="Estimated cost" value={option.park.cost === 0 ? "FREE" : `₹${option.park.cost}`} sub={option.park.cost === 0 ? "₹0 · verified free" : `${c.hours} h · illustrative tariff`} />
+                  <Stat
+                    icon={Footprints}
+                    label={walkRoute ? "Walking route" : "Walking (est.)"}
+                    value={walkRoute ? `${walkRoute.distanceM} m` : `~${option.walkM} m`}
+                    sub={routeQ.isLoading ? "Fetching route…" : walkRoute ? `OSM route · ${option.straightM} m straight` : `Estimate · ${option.straightM} m straight`}
+                  />
                   <Stat icon={Car} label="Availability" value={`${option.park.availabilityPct}%`} sub={`~${option.park.freeSpots} spots (simulated)`} />
                   <Stat icon={Timer} label="Search time" value={`~${option.park.searchMin} min`} sub="expected" />
                 </div>
@@ -210,7 +235,7 @@ function PlanScreen() {
                   <Footprints className="h-4 w-4" /> Walking route from parking to {chosen.restaurant.name}
                 </a>
                 <p className="mt-3 text-xs text-muted-foreground">
-                  Charges: {chargesText(option.park.parking)} · Open {hoursText(option.park.parking)} · Capacity {option.park.parking.capacity} spots
+                  Charges: {option.park.parking.access === "free" ? "free (₹0)" : `${chargesText(option.park.parking)} (illustrative)`} · Open {hoursText(option.park.parking)} · Capacity {option.park.parking.capacity} spots
                 </p>
               </div>
             </section>
@@ -242,7 +267,7 @@ function PlanScreen() {
                 selectedRestaurantId={chosen.restaurant.id}
                 selectedParkingId={option.park.parking.id}
                 onSelectParking={(id) => void pick(chosen.restaurant.id, id)}
-                route={[[option.park.parking.lat, option.park.parking.lng], [chosen.restaurant.lat, chosen.restaurant.lng]]}
+                route={walkRoute?.coords ?? [[option.park.parking.lat, option.park.parking.lng], [chosen.restaurant.lat, chosen.restaurant.lng]]}
                 className="h-72 w-full overflow-hidden rounded-2xl border border-border lg:h-80"
               />
               <div className="rounded-2xl border border-border bg-card p-4">
@@ -273,7 +298,7 @@ function PlanScreen() {
                             </div>
                             <div className="mt-0.5 flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
                               <AvailabilityBadge status={o.park.status} pct={o.park.availabilityPct} />
-                              <span>₹{o.park.cost}</span><span>{o.walkM} m</span>
+                              <AccessBadge access={o.park.parking.access} /><span>{o.park.cost === 0 ? "₹0" : `₹${o.park.cost}`}</span><span>~{o.walkM} m ({o.straightM} m straight)</span>
                               {o.eligible ? <span>score {o.score}</span> : <span className="text-busy">{o.issues[0]}</span>}
                             </div>
                           </div>

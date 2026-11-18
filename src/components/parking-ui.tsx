@@ -1,8 +1,8 @@
 import { Link } from "@tanstack/react-router";
-import { CalendarDays, Clock, Footprints, IndianRupee, MapPin, Pencil, Timer } from "lucide-react";
+import { CalendarDays, Clock, Footprints, IndianRupee, MapPin, Pencil, ShieldCheck, Tag, Timer } from "lucide-react";
 import { getArea } from "@/lib/data";
 import { formatTime, statusLabel, toCriteriaSafe, type ParkingStatus } from "@/lib/ui-helpers";
-import type { CriteriaSearch } from "@/lib/search";
+import { PREF_OPTIONS, type CriteriaSearch } from "@/lib/search";
 import { cn } from "@/lib/utils";
 
 const STATUS_CLASS: Record<ParkingStatus, string> = {
@@ -40,6 +40,7 @@ export function CriteriaBar({ search }: { search: CriteriaSearch }) {
     { icon: Timer, text: `${c.hours} h stay` },
     { icon: IndianRupee, text: `≤ ₹${c.budget}` },
     { icon: Footprints, text: `≤ ${c.walk} m` },
+    { icon: Tag, text: PREF_OPTIONS.find((o) => o.value === c.pref)!.short },
   ];
   return (
     <div className="flex flex-wrap items-center gap-2">
@@ -78,6 +79,47 @@ export function Stat({ icon: Icon, label, value, sub }: { icon: React.ComponentT
       </div>
       <div className="mt-1 font-display text-lg font-bold leading-tight">{value}</div>
       {sub && <div className="text-[11px] text-muted-foreground">{sub}</div>}
+    </div>
+  );
+}
+
+export function AccessBadge({ access, className }: { access: "free" | "paid" | "shared"; className?: string | undefined }) {
+  const map = {
+    free: { text: "FREE", cls: "bg-ok text-ink-foreground" },
+    paid: { text: "PAID", cls: "bg-ink text-ink-foreground" },
+    shared: { text: "SHARED", cls: "bg-primary text-primary-foreground" },
+  } as const;
+  return <span className={cn("inline-flex shrink-0 items-center rounded px-1.5 py-0.5 text-[10px] font-extrabold tracking-wider", map[access].cls, className)}>{map[access].text}</span>;
+}
+
+export function AuthStatus({ authorisation, operator, className }: { authorisation: string; operator: string; className?: string | undefined }) {
+  const shared = authorisation === "shared-permission";
+  return (
+    <span className={cn("inline-flex items-center gap-1 text-[11px] font-semibold text-ok", className)}>
+      <ShieldCheck className="h-3 w-3 shrink-0" />
+      {shared ? "Shared · owner permission verified" : "Verified authorised"} · {operator}
+    </span>
+  );
+}
+
+export function PrefToggle({ value, onChange, className }: { value: string; onChange: (v: string) => void; className?: string | undefined }) {
+  return (
+    <div role="radiogroup" aria-label="Parking preference" className={cn("grid grid-cols-3 gap-1 rounded-lg bg-muted p-1", className)}>
+      {PREF_OPTIONS.map((o) => (
+        <button
+          key={o.value}
+          type="button"
+          role="radio"
+          aria-checked={value === o.value}
+          onClick={() => onChange(o.value)}
+          className={cn(
+            "rounded-md px-2 py-1.5 text-xs font-semibold transition",
+            value === o.value ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
+          )}
+        >
+          {o.label}
+        </button>
+      ))}
     </div>
   );
 }

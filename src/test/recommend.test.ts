@@ -9,7 +9,8 @@ describe("ParkWise recommendation rules", () => {
     const ev = evaluateArea({ ...base, budget: 400, walk: 1500 });
     const ids = ev.restaurants.flatMap((r) => r.options.map((o) => o.park.parking.id));
     expect(ids).not.toContain("hkv-x-roadside");
-    expect(ev.excludedUnverified).toBe(1);
+    expect(ids).not.toContain("hkv-x-towaway");
+    expect(ev.excludedUnverified).toBe(2);
   });
 
   it("returns at most three recommendations", () => {
@@ -26,7 +27,7 @@ describe("ParkWise recommendation rules", () => {
     for (const r of rec.top) expect(r.best!.walkM).toBeLessThanOrEqual(300);
   });
 
-  it("prices a 2-hour stay at HKV main gate as first hour plus one extra hour", () => {
+  it("prices a 2-hour stay at HKV main gate as first hour plus one extra hour (₹60 + ₹40)", () => {
     const ev = evaluateArea(base);
     expect(ev.parkings.find((p) => p.parking.id === "hkv-p-gate")!.cost).toBe(100);
   });
@@ -73,5 +74,33 @@ describe("ParkWise data consistency", () => {
     const evening = evaluateArea(toCriteria({ area: "hkv", time: "20:00", day: "weekend", hours: 2, budget: 150, walk: 600 }));
     const gate = (e: typeof morning) => e.parkings.find((p) => p.parking.id === "hkv-p-gate")!.availabilityPct;
     expect(gate(morning)).toBeGreaterThan(gate(evening));
+  });
+});
+
+describe("parking preference", () => {
+  it("free-only recommends only verified ₹0 parking", () => {
+    const rec = topRecommendations({ ...base, pref: "free", walk: 1500 });
+    expect(rec.top.length).toBeGreaterThan(0);
+    for (const r of rec.top) {
+      expect(r.best!.park.cost).toBe(0);
+      expect(r.best!.park.parking.access).toBe("free");
+    }
+  });
+
+  it("only recommends authorised or owner-permitted shared parking", () => {
+    for (const pref of ["free", "both", "paid"] as const) {
+      const rec = topRecommendations({ ...base, pref, budget: 400, walk: 1500 });
+      for (const r of rec.top) expect(["authorised", "shared-permission"]).toContain(r.best!.park.parking.authorisation);
+    }
+  });
+
+  it("changes the score when the preference changes", () => {
+    const a = topRecommendations({ ...base, pref: "both" }).top[0]!.best!.score;
+    const b = topRecommendations({ ...base, pref: "paid" }).top[0]!.best!.score;
+    expect(a).not.toBe(b);
+  });
+
+  it("reports straight-line distance no greater than the estimated walking route", () => {
+    for (const r of evaluateArea(base).restaurants) for (const o of r.options) expect(o.straightM).toBeLessThanOrEqual(o.walkM);
   });
 });

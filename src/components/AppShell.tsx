@@ -29,7 +29,7 @@ export function SimulatedNotice({ className }: { className?: string | undefined 
     <div className={cn("flex items-start gap-2 rounded-xl border border-signal/50 bg-signal/15 px-3 py-2 text-xs text-signal-foreground", className)}>
       <FlaskConical className="mt-0.5 h-3.5 w-3.5 shrink-0" />
       <p>
-        <strong>Prototype:</strong> parking availability is <strong>simulated</strong> from typical demand patterns — it is not live data. Restaurants and tariffs are sample data.
+        <strong>Prototype:</strong> parking availability is <strong>simulated</strong> from typical demand patterns — it is not live data. Restaurants, parking and prices are illustrative sample data.
       </p>
     </div>
   );

@@ -1,9 +1,10 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { zodValidator } from "@tanstack/zod-adapter";
 import { useState } from "react";
-import { ArrowRight, BrainCircuit, Clock, Footprints, IndianRupee, MapPin, ShieldCheck, Sparkles, Timer } from "lucide-react";
+import { Tag, ArrowRight, BrainCircuit, Clock, Footprints, IndianRupee, MapPin, ShieldCheck, Sparkles, Timer } from "lucide-react";
 import heroImg from "@/assets/hauz-khas-dusk.jpg";
 import { Logo, SimulatedNotice, SiteFooter, StepNav } from "@/components/AppShell";
+import { PrefToggle } from "@/components/parking-ui";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -29,9 +30,9 @@ export const Route = createFileRoute("/")({
 });
 
 const PRESETS: { label: string; s: CriteriaSearch }[] = [
-  { label: "Saturday dinner · HKV · 8 pm", s: { area: "hkv", time: "20:00", day: "weekend", hours: 2, budget: 150, walk: 600 } },
-  { label: "Weekday lunch · Khan Market · 1 pm", s: { area: "khan", time: "13:00", day: "weekday", hours: 1, budget: 80, walk: 400 } },
-  { label: "Sunday coffee · CP · 11 am", s: { area: "cp", time: "11:00", day: "weekend", hours: 2, budget: 100, walk: 800 } },
+  { label: "Saturday dinner · HKV · 8 pm", s: { area: "hkv", time: "20:00", day: "weekend", hours: 2, budget: 150, walk: 600, pref: "both" } },
+  { label: "Weekday lunch · Khan Market · free parking", s: { area: "khan", time: "13:00", day: "weekday", hours: 1, budget: 80, walk: 400, pref: "free" } },
+  { label: "Sunday coffee · CP · 11 am · paid OK", s: { area: "cp", time: "11:00", day: "weekend", hours: 2, budget: 100, walk: 800, pref: "paid" } },
 ];
 
 function SearchScreen() {
@@ -126,6 +127,12 @@ function SearchScreen() {
                   <ToggleGroupItem value="weekday" className="data-[state=on]:bg-card data-[state=on]:shadow-sm">Weekday</ToggleGroupItem>
                   <ToggleGroupItem value="weekend" className="data-[state=on]:bg-card data-[state=on]:shadow-sm">Weekend</ToggleGroupItem>
                 </ToggleGroup>
+              </div>
+
+              <div className="space-y-2">
+                <Label className="flex items-center gap-1.5"><Tag className="h-4 w-4 text-primary" /> Parking preference</Label>
+                <PrefToggle value={form.pref} onChange={(v) => set("pref", v)} />
+                <p className="text-[11px] text-muted-foreground">Free = verified ₹0 parking only. Paid is fine = ranks convenience over price.</p>
               </div>
 
               <div className="space-y-3">

@@ -218,3 +218,7 @@
 .pw-popup { font-size: 12px; line-height: 1.45; min-width: 180px; }
 .pw-popup strong { display: block; font-family: var(--font-display); font-size: 14px; margin-bottom: 4px; color: var(--foreground); }
 .pw-popup-line { color: var(--muted-foreground); }
+.pw-pin-free { background: var(--ok); color: var(--ink-foreground); }
+.pw-pin-shared { background: var(--primary); color: var(--primary-foreground); border-style: dashed; }
+.pw-pin-restricted { background: var(--busy); color: var(--ink-foreground); width: 26px; height: 26px; font-size: 13px; opacity: 0.9; }
+.pw-pin-restricted::after { display: none; }

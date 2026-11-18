@@ -5,6 +5,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Slider } from "@/components/ui/slider";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { PrefToggle } from "@/components/parking-ui";
 import { BUDGET_RANGE, WALK_RANGE, type CriteriaSearch } from "@/lib/search";
 
 /** Inline trip controls; every change updates the URL so rankings recompute instantly. */
@@ -59,6 +60,10 @@ export function TripAdjuster({ search, onChange }: { search: CriteriaSearch; onC
           <div className="flex justify-between text-xs"><Label>Max walk</Label><span className="font-bold">≤ {walk} m</span></div>
           <Slider aria-label="Maximum walking distance" min={WALK_RANGE.min} max={WALK_RANGE.max} step={WALK_RANGE.step} value={[walk]} onValueChange={([v]) => setWalk(v ?? walk)} onValueCommit={([v]) => onChange({ walk: v ?? walk })} />
         </div>
+      </div>
+      <div className="mt-4 space-y-1.5">
+        <Label className="text-xs">Parking preference</Label>
+        <PrefToggle value={search.pref} onChange={(v) => onChange({ pref: v })} className="sm:max-w-md" />
       </div>
     </div>
   );

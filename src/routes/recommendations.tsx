@@ -5,10 +5,10 @@ import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { ArrowRight, BrainCircuit, Medal, Loader2, Car, Footprints, IndianRupee, Lightbulb, Map as MapIcon, RefreshCw, ShieldCheck, Star, Timer } from "lucide-react";
 import { AppShell, SimulatedNotice } from "@/components/AppShell";
-import { AvailabilityBadge, CriteriaBar, ScoreRing, Stat } from "@/components/parking-ui";
+import { AccessBadge, AuthStatus, AvailabilityBadge, CriteriaBar, ScoreRing, Stat } from "@/components/parking-ui";
 import { Button } from "@/components/ui/button";
 import { TripAdjuster } from "@/components/TripAdjuster";
-import { topRecommendations, WEIGHTS } from "@/lib/engine";
+import { topRecommendations } from "@/lib/engine";
 import { ruleBasedExplanation } from "@/lib/explain";
 import { explainRecommendations } from "@/lib/recommend.functions";
 import { cleanSearch, criteriaSearchSchema, toCriteria } from "@/lib/search";
@@ -30,10 +30,11 @@ export const Route = createFileRoute("/recommendations")({
 });
 
 const FACTORS = [
-  { key: "availability", label: "Availability", w: WEIGHTS.availability },
-  { key: "cost", label: "Cost", w: WEIGHTS.cost },
-  { key: "walk", label: "Walk", w: WEIGHTS.walk },
-  { key: "search", label: "Search time", w: WEIGHTS.search },
+  { key: "availability", label: "Availability" },
+  { key: "cost", label: "Cost" },
+  { key: "walk", label: "Walk" },
+  { key: "search", label: "Search time" },
+  { key: "authorisation", label: "Authorisation" },
 ] as const;
 
 function RecommendationsScreen() {
@@ -95,7 +96,7 @@ function RecommendationsScreen() {
             <Car className="mx-auto h-8 w-8 text-muted-foreground" />
             <h2 className="mt-3 text-lg font-bold">No restaurant fits these limits</h2>
             <p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">
-              None of the authorised parking facilities are open, within your walking distance and within your budget at this time. Try a higher budget or a longer walk.
+              {rules.summary} Try a higher budget, a longer walk or a different parking preference.
             </p>
             <Button asChild className="mt-4"><Link to="/" search={search}>Adjust search</Link></Button>
           </div>
@@ -152,25 +153,25 @@ function RecommendationsScreen() {
                       <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-ink font-display font-extrabold text-ink-foreground">P</span>
                       <div className="min-w-0 flex-1">
                         <div className="truncate text-sm font-semibold">{o.park.parking.name}</div>
-                        <div className="flex items-center gap-1 text-[11px] text-muted-foreground"><ShieldCheck className="h-3 w-3 text-ok" /> Authorised · {o.park.parking.operator}</div>
+                        <div className="mt-0.5 flex flex-wrap items-center gap-1.5"><AccessBadge access={o.park.parking.access} /><AuthStatus authorisation={o.park.parking.authorisation} operator={o.park.parking.operator} /></div>
                       </div>
                     </div>
 
                     <div className="mt-3 grid grid-cols-2 gap-2">
                       <Stat icon={Car} label="Availability" value={`${o.park.availabilityPct}%`} sub={`~${o.park.freeSpots} spots · simulated`} />
-                      <Stat icon={IndianRupee} label="Parking cost" value={`₹${o.park.cost}`} sub={`for ${c.hours} h`} />
-                      <Stat icon={Footprints} label="Walk" value={`${o.walkM} m`} sub={`~${o.walkMin} min`} />
+                      <Stat icon={IndianRupee} label="Parking cost" value={o.park.cost === 0 ? "FREE" : `₹${o.park.cost}`} sub={o.park.cost === 0 ? "₹0 · verified free" : `for ${c.hours} h · illustrative`} />
+                      <Stat icon={Footprints} label="Walk (est. route)" value={`~${o.walkM} m`} sub={`${o.straightM} m straight · ~${o.walkMin} min`} />
                       <Stat icon={Timer} label="Search time" value={`~${o.park.searchMin} min`} sub="to find a spot" />
                     </div>
 
                     <div className="mt-4 space-y-1.5">
                       {FACTORS.map((f) => (
                         <div key={f.key} className="flex items-center gap-2 text-[11px]">
-                          <span className="w-20 text-muted-foreground">{f.label}</span>
+                          <span className="w-24 text-muted-foreground">{f.label}</span>
                           <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
                             <div className="h-full rounded-full bg-gradient-primary" style={{ width: `${Math.round(o.breakdown[f.key] * 100)}%` }} />
                           </div>
-                          <span className="w-8 text-right text-muted-foreground">{Math.round(f.w * 100)}%</span>
+                          <span className="w-8 text-right text-muted-foreground">{Math.round(o.weights[f.key] * 100)}%</span>
                         </div>
                       ))}
                     </div>
@@ -188,6 +189,7 @@ function RecommendationsScreen() {
                         <>
                           <p className="mt-1 text-sm font-semibold">{exp.headline}</p>
                           <p className="mt-1 text-sm text-muted-foreground">{exp.reasoning}</p>
+                          {exp.tradeoff && <p className="mt-2 rounded-lg bg-card p-2 text-xs"><span className="font-semibold">Free vs paid: </span>{exp.tradeoff}</p>}
                           <p className="mt-2 flex gap-1.5 text-xs"><Lightbulb className="mt-0.5 h-3.5 w-3.5 shrink-0 text-signal" />{exp.tip}</p>
                         </>
                       )}

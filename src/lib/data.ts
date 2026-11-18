@@ -3,6 +3,10 @@
 // Parking availability is SIMULATED from time-of-day demand curves — it is not live data.
 
 export type AreaId = "hkv" | "khan" | "cp";
+export type ParkingAccess = "free" | "paid" | "shared";
+export type Authorisation = "authorised" | "shared-permission" | "unverified" | "restricted";
+
+export type RestrictedZone = { id: string; name: string; reason: string; center: [number, number]; radius: number };
 
 export type Restaurant = {
   id: string;
@@ -20,8 +24,13 @@ export type Parking = {
   name: string;
   operator: string;
   kind: "Surface" | "Multi-level" | "Underground";
-  /** Only verified, authorised facilities are ever recommended. */
+  /** Kept for readability: true only for authorised or owner-permitted shared parking. */
   verified: boolean;
+  /** Free (₹0) authorised, paid authorised, or shared with explicit property-owner permission. */
+  access: ParkingAccess;
+  /** Only "authorised" and "shared-permission" can ever be recommended. */
+  authorisation: Authorisation;
+  note?: string;
   lat: number;
   lng: number;
   capacity: number;
@@ -45,6 +54,8 @@ export type Area = {
   demand: { weekday: number[]; weekend: number[] };
   restaurants: Restaurant[];
   parkings: Parking[];
+  /** No-parking / tow-away zones (illustrative). Never used for parking. */
+  zones: RestrictedZone[];
 };
 
 const HKV_WEEKDAY = [0.15, 0.1, 0.08, 0.06, 0.05, 0.05, 0.08, 0.12, 0.2, 0.28, 0.35, 0.45, 0.58, 0.62, 0.55, 0.48, 0.5, 0.58, 0.68, 0.76, 0.82, 0.8, 0.66, 0.4];
@@ -73,14 +84,21 @@ export const AREAS: Record<AreaId, Area> = {
       { id: "hkv-saffron", name: "Saffron Lane", cuisine: "Mughlai", price: 2, rating: 4.0, lat: 28.5525, lng: 77.194, blurb: "Slow-cooked kebabs and biryani." },
       { id: "hkv-monsoon", name: "Monsoon Noodle Bar", cuisine: "Asian", price: 2, rating: 4.2, lat: 28.5544, lng: 77.195, blurb: "Hand-pulled noodles and dumplings." },
     ],
+    zones: [
+      { id: "hkv-z-road", name: "Hauz Khas Village Road", reason: "No-parking, tow-away enforced", center: [28.5537, 77.1957], radius: 55 },
+      { id: "hkv-z-deer", name: "Deer Park entrance lane", reason: "Emergency access — no parking", center: [28.5565, 77.1931], radius: 40 },
+    ],
     parkings: [
-      { id: "hkv-p-gate", name: "HKV Main Gate Authorised Parking", operator: "MCD (authorised contractor)", kind: "Surface", verified: true, lat: 28.5531, lng: 77.1958, capacity: 220, demandFactor: 1.12, firstHour: 60, perHourAfter: 40, dailyMax: 300, openFrom: 8, openTo: 24 },
-      { id: "hkv-p-deer", name: "Deer Park Gate Authorised Parking", operator: "DDA", kind: "Surface", verified: true, lat: 28.5568, lng: 77.194, capacity: 120, demandFactor: 0.86, firstHour: 30, perHourAfter: 20, dailyMax: 150, openFrom: 6, openTo: 22 },
-      { id: "hkv-p-enclave", name: "Hauz Khas Enclave Pay & Park", operator: "MCD", kind: "Surface", verified: true, lat: 28.551, lng: 77.1985, capacity: 80, demandFactor: 0.95, firstHour: 40, perHourAfter: 30, dailyMax: 200, openFrom: 8, openTo: 23 },
-      { id: "hkv-p-market", name: "Hauz Khas Market Multi-level Parking", operator: "MCD", kind: "Multi-level", verified: true, lat: 28.5478, lng: 77.2018, capacity: 400, demandFactor: 0.68, firstHour: 40, perHourAfter: 20, dailyMax: 150, openFrom: 7, openTo: 24 },
-      { id: "hkv-p-aurobindo", name: "Aurobindo Place Pay & Park", operator: "MCD", kind: "Surface", verified: true, lat: 28.5458, lng: 77.2003, capacity: 90, demandFactor: 0.9, firstHour: 20, perHourAfter: 20, dailyMax: 120, openFrom: 8, openTo: 22 },
+      { id: "hkv-p-gate", name: "HKV Main Gate Authorised Parking", operator: "MCD (authorised contractor)", kind: "Surface", verified: true, access: "paid", authorisation: "authorised", lat: 28.5531, lng: 77.1958, capacity: 220, demandFactor: 1.12, firstHour: 60, perHourAfter: 40, dailyMax: 300, openFrom: 8, openTo: 24 },
+      { id: "hkv-p-deer", name: "Deer Park Gate Authorised Parking", operator: "DDA", kind: "Surface", verified: true, access: "paid", authorisation: "authorised", lat: 28.5568, lng: 77.194, capacity: 120, demandFactor: 0.86, firstHour: 30, perHourAfter: 20, dailyMax: 150, openFrom: 6, openTo: 22 },
+      { id: "hkv-p-enclave", name: "Hauz Khas Enclave Pay & Park", operator: "MCD", kind: "Surface", verified: true, access: "paid", authorisation: "authorised", lat: 28.551, lng: 77.1985, capacity: 80, demandFactor: 0.95, firstHour: 40, perHourAfter: 30, dailyMax: 200, openFrom: 8, openTo: 23 },
+      { id: "hkv-p-market", name: "Hauz Khas Market Multi-level Parking", operator: "MCD", kind: "Multi-level", verified: true, access: "paid", authorisation: "authorised", lat: 28.5478, lng: 77.2018, capacity: 400, demandFactor: 0.68, firstHour: 40, perHourAfter: 20, dailyMax: 150, openFrom: 7, openTo: 24 },
+      { id: "hkv-p-aurobindo", name: "Aurobindo Place Pay & Park", operator: "MCD", kind: "Surface", verified: true, access: "paid", authorisation: "authorised", lat: 28.5458, lng: 77.2003, capacity: 90, demandFactor: 0.9, firstHour: 20, perHourAfter: 20, dailyMax: 120, openFrom: 8, openTo: 22 },
       // Unverified roadside spot — kept in data only to prove it is filtered out.
-      { id: "hkv-x-roadside", name: "Roadside stretch, Hauz Khas Village Road", operator: "Unknown", kind: "Surface", verified: false, lat: 28.554, lng: 77.1953, capacity: 30, demandFactor: 1, firstHour: 0, perHourAfter: 0, openFrom: 0, openTo: 24 },
+      { id: "hkv-f-fort", name: "Hauz Khas Fort Road Free Parking", operator: "DDA", kind: "Surface", verified: true, access: "free", authorisation: "authorised", lat: 28.5561, lng: 77.1966, capacity: 60, demandFactor: 1.18, firstHour: 0, perHourAfter: 0, openFrom: 6, openTo: 22 },
+      { id: "hkv-s-residency", name: "Lakeside Residency Shared Parking", operator: "Private owner (diner permission)", kind: "Surface", verified: true, access: "shared", authorisation: "shared-permission", note: "Owner permits diners; show your restaurant booking at the gate.", lat: 28.5523, lng: 77.1951, capacity: 25, demandFactor: 0.9, firstHour: 50, perHourAfter: 0, dailyMax: 50, openFrom: 11, openTo: 24 },
+      { id: "hkv-x-towaway", name: "Lane outside Deer Park gate", operator: "Traffic police tow-away zone", kind: "Surface", verified: false, access: "paid", authorisation: "restricted", note: "Marked no-parking / tow-away zone.", lat: 28.5566, lng: 77.1931, capacity: 15, demandFactor: 1, firstHour: 0, perHourAfter: 0, openFrom: 0, openTo: 24 },
+      { id: "hkv-x-roadside", name: "Roadside stretch, Hauz Khas Village Road", operator: "Unknown", kind: "Surface", verified: false, access: "paid", authorisation: "unverified", note: "Vacant roadside space — vacancy does not make it legal parking.", lat: 28.554, lng: 77.1953, capacity: 30, demandFactor: 1, firstHour: 0, perHourAfter: 0, openFrom: 0, openTo: 24 },
     ],
   },
   khan: {
@@ -98,10 +116,16 @@ export const AREAS: Record<AreaId, Area> = {
       { id: "khan-ember", name: "Ember & Oak Grill", cuisine: "Grill", price: 3, rating: 4.2, lat: 28.6006, lng: 77.2277, blurb: "Charcoal grills and craft cocktails." },
       { id: "khan-chai", name: "Khan Chai Collective", cuisine: "Indian Street Food", price: 1, rating: 4.1, lat: 28.5994, lng: 77.227, blurb: "Chaat, chai and quick bites." },
     ],
+    zones: [
+      { id: "khan-z-middle", name: "Khan Market middle lane", reason: "Pedestrian lane — no vehicles", center: [28.6, 77.227], radius: 30 },
+    ],
     parkings: [
-      { id: "khan-p-front", name: "Khan Market Front Authorised Parking", operator: "NDMC", kind: "Surface", verified: true, lat: 28.6008, lng: 77.2262, capacity: 150, demandFactor: 1.12, firstHour: 40, perHourAfter: 30, dailyMax: 250, openFrom: 8, openTo: 23 },
-      { id: "khan-p-rear", name: "Khan Market Rear Lane Parking", operator: "NDMC", kind: "Surface", verified: true, lat: 28.5995, lng: 77.2283, capacity: 110, demandFactor: 1.05, firstHour: 40, perHourAfter: 30, dailyMax: 250, openFrom: 8, openTo: 23 },
-      { id: "khan-p-lok", name: "Lok Nayak Bhawan Pay & Park", operator: "NDMC", kind: "Surface", verified: true, lat: 28.5983, lng: 77.2243, capacity: 200, demandFactor: 0.72, firstHour: 30, perHourAfter: 20, dailyMax: 150, openFrom: 7, openTo: 23 },
+      { id: "khan-p-front", name: "Khan Market Front Authorised Parking", operator: "NDMC", kind: "Surface", verified: true, access: "paid", authorisation: "authorised", lat: 28.6008, lng: 77.2262, capacity: 150, demandFactor: 1.12, firstHour: 40, perHourAfter: 30, dailyMax: 250, openFrom: 8, openTo: 23 },
+      { id: "khan-p-rear", name: "Khan Market Rear Lane Parking", operator: "NDMC", kind: "Surface", verified: true, access: "paid", authorisation: "authorised", lat: 28.5995, lng: 77.2283, capacity: 110, demandFactor: 1.05, firstHour: 40, perHourAfter: 30, dailyMax: 250, openFrom: 8, openTo: 23 },
+      { id: "khan-f-lodhi", name: "Lodhi Garden Gate 1 Free Parking", operator: "NDMC", kind: "Surface", verified: true, access: "free", authorisation: "authorised", lat: 28.5965, lng: 77.2236, capacity: 80, demandFactor: 1.0, firstHour: 0, perHourAfter: 0, openFrom: 6, openTo: 20 },
+      { id: "khan-s-office", name: "Khan Market Office Block Shared Parking", operator: "Private owner (permission)", kind: "Surface", verified: true, access: "shared", authorisation: "shared-permission", note: "Owner permits evening/weekend visitors via the guard desk.", lat: 28.6013, lng: 77.2287, capacity: 30, demandFactor: 0.85, firstHour: 60, perHourAfter: 0, dailyMax: 60, openFrom: 10, openTo: 23 },
+      { id: "khan-x-roadside", name: "Roadside near Khan Market rear lane", operator: "Unknown", kind: "Surface", verified: false, access: "paid", authorisation: "unverified", note: "Vacant roadside space — vacancy does not make it legal parking.", lat: 28.5991, lng: 77.2276, capacity: 10, demandFactor: 1, firstHour: 0, perHourAfter: 0, openFrom: 0, openTo: 24 },
+      { id: "khan-p-lok", name: "Lok Nayak Bhawan Pay & Park", operator: "NDMC", kind: "Surface", verified: true, access: "paid", authorisation: "authorised", lat: 28.5983, lng: 77.2243, capacity: 200, demandFactor: 0.72, firstHour: 30, perHourAfter: 20, dailyMax: 150, openFrom: 7, openTo: 23 },
     ],
   },
   cp: {
@@ -119,11 +143,17 @@ export const AREAS: Record<AreaId, Area> = {
       { id: "cp-radial", name: "Radial Road Diner", cuisine: "American", price: 2, rating: 4.0, lat: 28.6305, lng: 77.2143, blurb: "Burgers, shakes and booths." },
       { id: "cp-barakhamba", name: "Barakhamba Grill", cuisine: "Grill & Bar", price: 3, rating: 4.1, lat: 28.6312, lng: 77.2202, blurb: "Rooftop grill on the outer circle." },
     ],
+    zones: [
+      { id: "cp-z-outer", name: "Outer Circle (Block N)", reason: "Tow-away zone", center: [28.6338, 77.2196], radius: 45 },
+    ],
     parkings: [
-      { id: "cp-p-palika", name: "Palika Bazaar Underground Parking", operator: "NDMC", kind: "Underground", verified: true, lat: 28.6295, lng: 77.2186, capacity: 600, demandFactor: 0.9, firstHour: 30, perHourAfter: 20, dailyMax: 200, openFrom: 7, openTo: 24 },
-      { id: "cp-p-shivaji", name: "Shivaji Stadium Multi-level Parking", operator: "NDMC", kind: "Multi-level", verified: true, lat: 28.6283, lng: 77.2123, capacity: 500, demandFactor: 0.7, firstHour: 30, perHourAfter: 20, dailyMax: 150, openFrom: 7, openTo: 24 },
-      { id: "cp-p-bks", name: "Baba Kharak Singh Marg Multi-level", operator: "NDMC", kind: "Multi-level", verified: true, lat: 28.6262, lng: 77.2108, capacity: 800, demandFactor: 0.6, firstHour: 30, perHourAfter: 20, dailyMax: 150, openFrom: 7, openTo: 24 },
-      { id: "cp-p-blocka", name: "Inner Circle Block A Authorised Parking", operator: "NDMC", kind: "Surface", verified: true, lat: 28.6328, lng: 77.2182, capacity: 120, demandFactor: 1.2, firstHour: 50, perHourAfter: 40, dailyMax: 300, openFrom: 8, openTo: 23 },
+      { id: "cp-p-palika", name: "Palika Bazaar Underground Parking", operator: "NDMC", kind: "Underground", verified: true, access: "paid", authorisation: "authorised", lat: 28.6295, lng: 77.2186, capacity: 600, demandFactor: 0.9, firstHour: 30, perHourAfter: 20, dailyMax: 200, openFrom: 7, openTo: 24 },
+      { id: "cp-p-shivaji", name: "Shivaji Stadium Multi-level Parking", operator: "NDMC", kind: "Multi-level", verified: true, access: "paid", authorisation: "authorised", lat: 28.6283, lng: 77.2123, capacity: 500, demandFactor: 0.7, firstHour: 30, perHourAfter: 20, dailyMax: 150, openFrom: 7, openTo: 24 },
+      { id: "cp-p-bks", name: "Baba Kharak Singh Marg Multi-level", operator: "NDMC", kind: "Multi-level", verified: true, access: "paid", authorisation: "authorised", lat: 28.6262, lng: 77.2108, capacity: 800, demandFactor: 0.6, firstHour: 30, perHourAfter: 20, dailyMax: 150, openFrom: 7, openTo: 24 },
+      { id: "cp-f-janpath", name: "Janpath Lane Free Parking", operator: "NDMC", kind: "Surface", verified: true, access: "free", authorisation: "authorised", lat: 28.6257, lng: 77.2192, capacity: 50, demandFactor: 1.15, firstHour: 0, perHourAfter: 0, openFrom: 8, openTo: 20 },
+      { id: "cp-s-regal", name: "Regal Building Shared Parking", operator: "Private owner (permission)", kind: "Surface", verified: true, access: "shared", authorisation: "shared-permission", note: "Owner permits visitors with a same-day restaurant bill.", lat: 28.6301, lng: 77.2139, capacity: 40, demandFactor: 0.95, firstHour: 80, perHourAfter: 0, dailyMax: 80, openFrom: 10, openTo: 23 },
+      { id: "cp-x-outer", name: "Outer Circle kerbside", operator: "Traffic police tow-away zone", kind: "Surface", verified: false, access: "paid", authorisation: "restricted", note: "Marked no-parking / tow-away stretch.", lat: 28.6338, lng: 77.2196, capacity: 20, demandFactor: 1, firstHour: 0, perHourAfter: 0, openFrom: 0, openTo: 24 },
+      { id: "cp-p-blocka", name: "Inner Circle Block A Authorised Parking", operator: "NDMC", kind: "Surface", verified: true, access: "paid", authorisation: "authorised", lat: 28.6328, lng: 77.2182, capacity: 120, demandFactor: 1.2, firstHour: 50, perHourAfter: 40, dailyMax: 300, openFrom: 8, openTo: 23 },
     ],
   },
 };

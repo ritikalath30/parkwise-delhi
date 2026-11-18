@@ -31,7 +31,10 @@ function icon(kind: "dine" | "park", pin: MapPin, active: boolean) {
   }
   return L.divIcon({
     className: "",
-    html: `<div class="pw-pin pw-pin-park ${active ? "is-active" : ""}" style="--avail:${STATUS_VAR[pin.status ?? "good"]}" aria-label="Authorised parking: ${esc(pin.name)}">P</div>`,
+    html:
+      pin.variant === "restricted"
+        ? `<div class="pw-pin pw-pin-park pw-pin-restricted ${active ? "is-active" : ""}" aria-label="Restricted, not legal parking: ${esc(pin.name)}">✕</div>`
+        : `<div class="pw-pin pw-pin-park pw-pin-${pin.variant ?? "paid"} ${active ? "is-active" : ""}" style="--avail:${STATUS_VAR[pin.status ?? "good"]}" aria-label="${pin.variant === "free" ? "Free" : pin.variant === "shared" ? "Shared" : "Paid"} authorised parking: ${esc(pin.name)}">P</div>`,
     iconSize: [34, 34],
     iconAnchor: [17, 17],
     popupAnchor: [0, -16],
@@ -59,6 +62,7 @@ export default function ParkMap({
   walkCircle,
   className,
   showPopups = true,
+  zones,
 }: MapViewProps) {
   const elRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
@@ -161,11 +165,23 @@ export default function ParkMap({
   }, [selectedRestaurantId, selectedParkingId, pinsKey]);
 
   // Route + walking radius
-  const overlayKey = JSON.stringify([route, walkCircle]);
+  const overlayKey = JSON.stringify([route, walkCircle, zones]);
   useEffect(() => {
     const layer = overlayLayerRef.current;
     if (!layer) return;
     layer.clearLayers();
+    for (const z of zones ?? []) {
+      L.circle(z.center, {
+        radius: z.radius,
+        color: "oklch(0.6 0.2 28)",
+        weight: 2,
+        dashArray: "4 4",
+        fillColor: "oklch(0.6 0.2 28)",
+        fillOpacity: 0.18,
+      })
+        .bindTooltip(`⛔ ${esc(z.name)} — ${esc(z.reason)}`, { sticky: true })
+        .addTo(layer);
+    }
     if (walkCircle) {
       L.circle(walkCircle.center, {
         radius: walkCircle.radius,

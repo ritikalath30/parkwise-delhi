@@ -12,6 +12,7 @@ const inputSchema = z.object({
   hours: z.number(),
   budget: z.number(),
   walk: z.number(),
+  pref: z.string().max(10).optional(),
 });
 
 const outputSchema = z.object({
@@ -23,7 +24,7 @@ export type AiExplanation = {
   source: "ai" | "fallback";
   note?: string;
   summary: string;
-  picks: { id: string; headline: string; reasoning: string; tip: string; rankReason: string }[];
+  picks: { id: string; headline: string; reasoning: string; tip: string; rankReason: string; tradeoff: string }[];
 };
 
 export const explainRecommendations = createServerFn({ method: "POST" })
@@ -45,15 +46,19 @@ export const explainRecommendations = createServerFn({ method: "POST" })
       parking: r.best!.park.parking.name,
       parkingType: r.best!.park.parking.kind,
       operator: r.best!.park.parking.operator,
+      access: r.best!.park.parking.access,
+      authorisation: r.best!.park.parking.authorisation,
+      straightLineMetres: r.best!.straightM,
       capacity: r.best!.park.parking.capacity,
       simulatedFreeSpots: r.best!.park.freeSpots,
       simulatedAvailabilityPct: r.best!.park.availabilityPct,
       costRupees: r.best!.park.cost,
-      walkMetres: r.best!.walkM,
+      estimatedWalkRouteMetres: r.best!.walkM,
       walkMinutes: r.best!.walkMin,
       expectedSearchMinutes: r.best!.park.searchMin,
       score: r.best!.score,
       whyThisRank: rules.picks[i]?.rankReason,
+      freeVsPaidTradeoff: rules.picks[i]?.tradeoff,
     }));
 
     const context = {
@@ -62,18 +67,19 @@ export const explainRecommendations = createServerFn({ method: "POST" })
       stayHours: c.hours,
       parkingBudgetRupees: c.budget,
       maxWalkMetres: c.walk,
-      scoreWeights: "availability 35%, cost 25%, walk 25%, search time 15%",
+      parkingPreference: c.pref === "free" ? "free parking only" : c.pref === "paid" ? "paid parking acceptable (convenience first)" : "compare free and paid",
+      scoreWeights: c.pref === "paid" ? "availability 38%, cost 10%, walk 28%, search 17%, authorisation 7%" : "availability 32%, cost 23%, walk 23%, search 15%, authorisation 7%",
     };
 
     try {
       const res = await generateResponse({
         model: "openai/gpt-6-astra",
         instructions:
-          "You are ParkWise GeoAI, a friendly Delhi parking assistant. Explain restaurant recommendations using ONLY the numbers provided — never invent figures. Parking availability is simulated; never call it live. Only mention the authorised parking facilities given; never suggest roadside, informal or unverified parking. Be concise, warm and concrete. Use ₹ for rupees.",
+          "You are ParkWise GeoAI, a friendly Delhi parking assistant. Explain restaurant recommendations using ONLY the numbers provided — never invent figures. Parking availability is simulated; never call it live. Only mention the authorised or owner-permitted shared facilities given; never suggest roadside, restricted, informal or unverified parking, and never call a vacant roadside space legal parking. Be concise, warm and concrete. Use ₹ for rupees.",
         input: [
           {
             role: "user",
-            content: `Trip: ${JSON.stringify(context)}\nTop picks (already ranked, with the reason for each rank): ${JSON.stringify(facts)}\n\nReturn JSON with this exact shape: {"summary": string (1-2 sentences on why #1 beats #2 and #3), "picks": [{"id": string (same id), "headline": string (max 8 words), "reasoning": string (2-3 sentences: why it holds THIS rank versus the picks above/below, citing availability %, cost, walk and search time vs. the user's limits), "tip": string (one practical arrival tip, max 20 words)}]}. Return JSON.`,
+            content: `Trip: ${JSON.stringify(context)}\nTop picks (already ranked, with the reason for each rank): ${JSON.stringify(facts)}\n\nReturn JSON with this exact shape: {"summary": string (1-2 sentences on why #1 beats #2 and #3), "picks": [{"id": string (same id), "headline": string (max 8 words), "reasoning": string (3 sentences: why this restaurant was selected and holds THIS rank; why its parking facility is suitable including whether it is free, paid or owner-permitted shared; the trade-off between cost, availability and walking distance, citing the numbers), "tip": string (one practical arrival tip, max 20 words)}]}. Return JSON.`,
           },
         ],
         text: { format: { type: "json_object" } },
@@ -92,7 +98,7 @@ export const explainRecommendations = createServerFn({ method: "POST" })
       // Keep the rule-based order and rank reasons; take AI wording only for known ids.
       const picks = rules.picks.map((rp) => {
         const ai = parsed.picks.find((p) => p.id === rp.id);
-        return ai ? { ...ai, id: rp.id, rankReason: rp.rankReason } : rp;
+        return ai ? { ...ai, id: rp.id, rankReason: rp.rankReason, tradeoff: rp.tradeoff } : rp;
       });
       return { source: "ai", summary: parsed.summary, picks };
     } catch (err) {
