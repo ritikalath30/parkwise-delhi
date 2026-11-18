@@ -74,6 +74,15 @@ describe("other inputs", () => {
     expect(withRoute.issues.join(" ")).toMatch(/OSM route/);
   });
 
+  it("never reports a walking route shorter than the straight line", () => {
+    const r = evaluateArea(c()).restaurants[0]!;
+    const o = r.options[0]!;
+    const ev = evaluateArea(c(), { [routeKey(o.park.parking.id, r.restaurant.id)]: 5 });
+    const w = ev.restaurants[0]!.options.find((x) => x.park.parking.id === o.park.parking.id)!;
+    expect(w.walkSource).toBe("route");
+    expect(w.walkM).toBeGreaterThanOrEqual(w.straightM);
+  });
+
   it("arrival time changes simulated availability", () => {
     const pct = (time: string) => evaluateArea(c({ time })).parkings.map((p) => p.availabilityPct);
     expect(pct("10:00")).not.toEqual(pct("20:00"));

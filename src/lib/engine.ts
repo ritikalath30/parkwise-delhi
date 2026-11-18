@@ -196,10 +196,12 @@ export function evaluateArea(c: Criteria, routes?: RouteMatrix | null): AreaEval
   const restaurants = area.restaurants.map<RestaurantEval>((r) => {
     const options = parkings
       .map<Option>((pe) => {
+        const straightM = Math.round(haversineM(r, pe.parking) / 10) * 10;
         const routeM = routes?.[routeKey(pe.parking.id, r.id)];
         const walkSource = routeM !== undefined ? ("route" as const) : ("estimate" as const);
-        const walkM = routeM !== undefined ? Math.round(routeM / 10) * 10 : walkingDistanceM(r, pe.parking);
-        const straightM = Math.round(haversineM(r, pe.parking) / 10) * 10;
+        // OSRM measures between points snapped onto the street network, so a route can come out
+        // shorter than the straight line between the actual locations; never report less than that.
+        const walkM = routeM !== undefined ? Math.max(straightM, Math.round(routeM / 10) * 10) : walkingDistanceM(r, pe.parking);
         const issues: string[] = [];
         const blockers: Blocker[] = [];
         if (c.pref === "free" && pe.cost > 0) {
