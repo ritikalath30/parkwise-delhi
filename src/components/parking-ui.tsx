@@ -21,10 +21,11 @@ const DOT_CLASS: Record<ParkingStatus, string> = {
 
 export function AvailabilityBadge({ status, pct, className }: { status: ParkingStatus; pct?: number | undefined; className?: string | undefined }) {
   return (
-    <span className={cn("inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-xs font-semibold", STATUS_CLASS[status], className)}>
+    <span title="Simulated estimate, not live data" className={cn("inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border px-2 py-0.5 text-xs font-semibold", STATUS_CLASS[status], className)}>
       <span className={cn("h-1.5 w-1.5 rounded-full", DOT_CLASS[status])} />
       {status === "closed" ? "Closed" : pct !== undefined ? `${pct}% free` : statusLabel(status)}
-      <span className="sr-only"> (simulated)</span>
+      {status !== "closed" && pct !== undefined && <span className="font-normal opacity-70">· sim.</span>}
+      <span className="sr-only"> (simulated, not live)</span>
     </span>
   );
 }

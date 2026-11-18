@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { formatTime, topRecommendations } from "@/lib/engine";
 import { cleanSearch, criteriaSearchSchema, DEFAULT_SEARCH, toCriteria } from "@/lib/search";
-import { directionsUrl, PRICE_LABEL } from "@/lib/ui-helpers";
+import { chargesText, directionsUrl, hoursText, PRICE_LABEL, walkingUrl } from "@/lib/ui-helpers";
 import { cn } from "@/lib/utils";
 
 const planSearchSchema = criteriaSearchSchema.extend({
@@ -66,14 +66,26 @@ function PlanScreen() {
       `Est. parking cost: ₹${option.park.cost}`,
       `Walk: ${option.walkM} m (~${option.walkMin} min)`,
       `Simulated availability: ${option.park.availabilityPct}% · ~${option.park.searchMin} min to find a spot`,
-      `Directions: ${directionsUrl(option.park.parking.lat, option.park.parking.lng)}`,
+      `Drive to parking: ${directionsUrl(option.park.parking.lat, option.park.parking.lng)}`,
+      `Walk to restaurant: ${walkingUrl(option.park.parking, chosen.restaurant)}`,
       `Note: availability is simulated, not live.`,
     ].join("\n");
     try {
       await navigator.clipboard.writeText(text);
       toast.success("Plan copied to clipboard");
     } catch {
-      toast.error("Couldn't copy — your browser blocked clipboard access");
+      // Fallback for browsers/iframes that block the async clipboard API
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      ta.setAttribute("readonly", "");
+      ta.style.position = "fixed";
+      ta.style.opacity = "0";
+      document.body.appendChild(ta);
+      ta.select();
+      const ok = document.execCommand("copy");
+      ta.remove();
+      if (ok) toast.success("Plan copied to clipboard");
+      else toast.error("Couldn't copy — your browser blocked clipboard access");
     }
   };
 
@@ -141,11 +153,13 @@ function PlanScreen() {
           </div>
         ) : (
           <div className="mt-6 grid gap-4 lg:grid-cols-[1.15fr_1fr]">
-            <section className="overflow-hidden rounded-3xl border border-border bg-card shadow-[var(--shadow-float)]">
+            <section className="self-start overflow-hidden rounded-3xl border border-border bg-card shadow-[var(--shadow-float)]">
               <div className="bg-ink p-5 text-ink-foreground">
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <div className="text-xs uppercase tracking-wider text-ink-foreground/60">Recommended parking</div>
+                    <div className="text-xs uppercase tracking-wider text-ink-foreground/60">
+                      {option === chosen.best ? "Recommended parking" : "Your selected parking"}
+                    </div>
                     <h2 className="mt-1 text-2xl font-extrabold leading-tight">{option.park.parking.name}</h2>
                     <div className="mt-1 flex items-center gap-1.5 text-xs text-ink-foreground/75">
                       <ShieldCheck className="h-3.5 w-3.5 text-ok" /> Authorised · {option.park.parking.operator} · {option.park.parking.kind}
@@ -171,6 +185,11 @@ function PlanScreen() {
                     To be seated by <strong>{formatTime(c.arrival)}</strong>, reach the parking by <strong>{formatTime(leaveBy)}</strong>.
                   </span>
                 </div>
+                {option !== chosen.best && chosen.best && (
+                  <button className="mt-3 text-xs font-semibold text-primary hover:underline" onClick={() => pick(chosen.restaurant.id)}>
+                    ← Switch back to recommended: {chosen.best.park.parking.name} (score {chosen.best.score} vs {option.score})
+                  </button>
+                )}
                 {isTop && (
                   <p className="mt-3 flex items-center gap-1.5 text-xs text-muted-foreground"><Sparkles className="h-3.5 w-3.5 text-signal" /> This is ParkWise's #1 AI pick for your trip.</p>
                 )}
@@ -182,6 +201,17 @@ function PlanScreen() {
                   </Button>
                   <Button variant="outline" size="lg" onClick={copyPlan}><Copy /> Copy plan</Button>
                 </div>
+                <a
+                  href={walkingUrl(option.park.parking, chosen.restaurant)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mt-3 flex items-center justify-center gap-1.5 text-sm font-semibold text-primary hover:underline"
+                >
+                  <Footprints className="h-4 w-4" /> Walking route from parking to {chosen.restaurant.name}
+                </a>
+                <p className="mt-3 text-xs text-muted-foreground">
+                  Charges: {chargesText(option.park.parking)} · Open {hoursText(option.park.parking)} · Capacity {option.park.parking.capacity} spots
+                </p>
               </div>
             </section>
 
@@ -190,8 +220,25 @@ function PlanScreen() {
                 center={[chosen.restaurant.lat, chosen.restaurant.lng]}
                 zoom={17}
                 fitKey={`${chosen.restaurant.id}-${option.park.parking.id}`}
-                restaurants={[{ id: chosen.restaurant.id, name: chosen.restaurant.name, lat: chosen.restaurant.lat, lng: chosen.restaurant.lng }]}
-                parkings={[option, ...alternatives].map((o) => ({ id: o.park.parking.id, name: o.park.parking.name, lat: o.park.parking.lat, lng: o.park.parking.lng, status: o.park.status }))}
+                restaurants={[{
+                  id: chosen.restaurant.id,
+                  name: chosen.restaurant.name,
+                  lat: chosen.restaurant.lat,
+                  lng: chosen.restaurant.lng,
+                  popupLines: [`${chosen.restaurant.cuisine} · ${PRICE_LABEL[chosen.restaurant.price]} · ★ ${chosen.restaurant.rating}`, chosen.restaurant.blurb],
+                }]}
+                parkings={[option, ...alternatives].map((o) => ({
+                  id: o.park.parking.id,
+                  name: o.park.parking.name,
+                  lat: o.park.parking.lat,
+                  lng: o.park.parking.lng,
+                  status: o.park.status,
+                  popupLines: [
+                    `✓ Verified authorised · ${o.park.parking.operator}`,
+                    `Simulated availability: ${o.park.availabilityPct}% (~${o.park.freeSpots} of ${o.park.parking.capacity} spots)`,
+                    `₹${o.park.cost} for ${c.hours} h · ${o.walkM} m walk · ~${o.park.searchMin} min search`,
+                  ],
+                }))}
                 selectedRestaurantId={chosen.restaurant.id}
                 selectedParkingId={option.park.parking.id}
                 onSelectParking={(id) => void pick(chosen.restaurant.id, id)}
@@ -199,29 +246,47 @@ function PlanScreen() {
                 className="h-72 w-full overflow-hidden rounded-2xl border border-border lg:h-80"
               />
               <div className="rounded-2xl border border-border bg-card p-4">
-                <h3 className="text-sm font-bold">Other authorised options ({alternatives.length})</h3>
-                {alternatives.length === 0 ? (
-                  <p className="mt-2 text-xs text-muted-foreground">No other authorised facility fits your budget and walking limit.</p>
-                ) : (
-                  <ul className="mt-2 space-y-2">
-                    {alternatives.map((o) => (
-                      <li key={o.park.parking.id} className="flex items-center justify-between gap-2 rounded-xl border border-border p-2.5">
-                        <div className="min-w-0">
-                          <div className="truncate text-sm font-semibold">{o.park.parking.name}</div>
-                          <div className="mt-0.5 flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
-                            <AvailabilityBadge status={o.park.status} pct={o.park.availabilityPct} />
-                            <span>₹{o.park.cost}</span><span>{o.walkM} m</span><span>score {o.score}</span>
+                <h3 className="text-sm font-bold">Authorised parking for {chosen.restaurant.name}</h3>
+                <p className="text-xs text-muted-foreground">Tap an option (or a P on the map) to switch. Availability is simulated.</p>
+                <ul className="mt-3 space-y-2" role="radiogroup" aria-label="Parking options">
+                  {chosen.options.map((o) => {
+                    const active = o === option;
+                    const isBest = o === chosen.best;
+                    return (
+                      <li key={o.park.parking.id}>
+                        <button
+                          type="button"
+                          role="radio"
+                          aria-checked={active}
+                          disabled={!o.eligible}
+                          onClick={() => pick(chosen.restaurant.id, o.park.parking.id)}
+                          className={cn(
+                            "flex w-full items-center justify-between gap-2 rounded-xl border p-2.5 text-left transition",
+                            active ? "border-primary bg-accent/50 ring-2 ring-primary/20" : "border-border hover:border-primary/50",
+                            !o.eligible && "cursor-not-allowed opacity-55 hover:border-border",
+                          )}
+                        >
+                          <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              <span className="truncate text-sm font-semibold">{o.park.parking.name}</span>
+                              {isBest && <span className="rounded-full bg-gradient-signal px-1.5 py-0.5 text-[10px] font-bold text-signal-foreground">Recommended</span>}
+                            </div>
+                            <div className="mt-0.5 flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
+                              <AvailabilityBadge status={o.park.status} pct={o.park.availabilityPct} />
+                              <span>₹{o.park.cost}</span><span>{o.walkM} m</span>
+                              {o.eligible ? <span>score {o.score}</span> : <span className="text-busy">{o.issues[0]}</span>}
+                            </div>
                           </div>
-                        </div>
-                        <Button size="sm" variant="outline" onClick={() => pick(chosen.restaurant.id, o.park.parking.id)}>Use</Button>
+                          <span className={cn("grid h-5 w-5 shrink-0 place-items-center rounded-full border-2", active ? "border-primary bg-primary text-primary-foreground" : "border-border")}>
+                            {active && <Check className="h-3 w-3" />}
+                          </span>
+                        </button>
                       </li>
-                    ))}
-                  </ul>
-                )}
-                {option !== chosen.best && chosen.best && (
-                  <button className="mt-3 text-xs font-semibold text-primary" onClick={() => pick(chosen.restaurant.id)}>
-                    ← Back to recommended parking
-                  </button>
+                    );
+                  })}
+                </ul>
+                {alternatives.length === 0 && (
+                  <p className="mt-2 text-xs text-muted-foreground">No other authorised facility fits your budget and walking limit.</p>
                 )}
               </div>
             </div>

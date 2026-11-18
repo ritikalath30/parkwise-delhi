@@ -5,7 +5,8 @@ export type MapPin = {
   lng: number;
   dim?: boolean | undefined;
   status?: "good" | "limited" | "scarce" | "closed" | undefined;
-  popup?: string | undefined;
+  /** Lines shown in the marker's popup (plain text, escaped by the map). */
+  popupLines?: string[] | undefined;
 };
 
 export type MapViewProps = {
@@ -16,9 +17,11 @@ export type MapViewProps = {
   parkings: MapPin[];
   selectedRestaurantId?: string | null | undefined;
   selectedParkingId?: string | null | undefined;
-  onSelectRestaurant?: (id: string) => void | undefined;
-  onSelectParking?: (id: string) => void | undefined;
+  onSelectRestaurant?: ((id: string) => void) | undefined;
+  onSelectParking?: ((id: string) => void) | undefined;
   route?: [number, number][] | null | undefined;
   walkCircle?: { center: [number, number]; radius: number } | null | undefined;
   className?: string | undefined;
+  /** Leaflet popups on marker click; turn off when the page shows its own detail card. */
+  showPopups?: boolean | undefined;
 };

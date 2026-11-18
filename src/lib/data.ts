@@ -114,7 +114,7 @@ export const AREAS: Record<AreaId, Area> = {
     demand: { weekday: CP_WEEKDAY, weekend: CP_WEEKEND },
     restaurants: [
       { id: "cp-arcade", name: "Circle Arcade Kitchen", cuisine: "Multi-cuisine", price: 2, rating: 4.2, lat: 28.632, lng: 77.2176, blurb: "Classic colonnade dining room." },
-      { id: "cp-janpath", name: "Janpath Spice House", cuisine: "North Indian", price: 2, rating: 4.3, lat: 28.6291, lng: 77.2192, blurb: "Family-style curries near Janpath." },
+      { id: "cp-janpath", name: "Janpath Spice House", cuisine: "North Indian", price: 2, rating: 4.3, lat: 28.6284, lng: 77.2199, blurb: "Family-style curries near Janpath." },
       { id: "cp-colonnade", name: "Colonnade Coffee Roasters", cuisine: "Café", price: 1, rating: 4.5, lat: 28.6331, lng: 77.2159, blurb: "In-house roasted beans and bakes." },
       { id: "cp-radial", name: "Radial Road Diner", cuisine: "American", price: 2, rating: 4.0, lat: 28.6305, lng: 77.2143, blurb: "Burgers, shakes and booths." },
       { id: "cp-barakhamba", name: "Barakhamba Grill", cuisine: "Grill & Bar", price: 3, rating: 4.1, lat: 28.6312, lng: 77.2202, blurb: "Rooftop grill on the outer circle." },

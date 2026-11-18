@@ -215,3 +215,6 @@
   box-shadow: var(--shadow-float);
 }
 .leaflet-popup-content { margin: 12px 14px; }
+.pw-popup { font-size: 12px; line-height: 1.45; min-width: 180px; }
+.pw-popup strong { display: block; font-family: var(--font-display); font-size: 14px; margin-bottom: 4px; color: var(--foreground); }
+.pw-popup-line { color: var(--muted-foreground); }

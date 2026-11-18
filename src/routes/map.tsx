@@ -1,7 +1,7 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { zodValidator } from "@tanstack/zod-adapter";
 import { useEffect, useMemo, useState } from "react";
-import { ArrowRight, Car, Footprints, IndianRupee, Search, ShieldCheck, Sparkles, Star, Timer, UtensilsCrossed } from "lucide-react";
+import { ArrowRight, Car, Navigation, X, Footprints, IndianRupee, Search, ShieldCheck, Sparkles, Star, Timer, UtensilsCrossed } from "lucide-react";
 import { AppShell, SimulatedNotice } from "@/components/AppShell";
 import { MapView } from "@/components/MapView";
 import type { MapPin } from "@/components/map-types";
@@ -14,7 +14,7 @@ import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { evaluateArea } from "@/lib/engine";
 import { BUDGET_RANGE, cleanSearch, criteriaSearchSchema, toCriteria, WALK_RANGE } from "@/lib/search";
-import { PRICE_LABEL } from "@/lib/ui-helpers";
+import { chargesText, directionsUrl, hoursText, PRICE_LABEL, walkingUrl } from "@/lib/ui-helpers";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/map")({
@@ -75,9 +75,13 @@ function MapScreen() {
         lat: r.restaurant.lat,
         lng: r.restaurant.lng,
         dim: !r.eligible,
-        popup: r.best
-          ? `${r.restaurant.cuisine} · ★ ${r.restaurant.rating} · Best parking: ${r.best.walkM} m, ₹${r.best.park.cost}`
-          : `${r.restaurant.cuisine} · No authorised parking within your limits`,
+        popupLines: [
+          `${r.restaurant.cuisine} · ${PRICE_LABEL[r.restaurant.price]} · ★ ${r.restaurant.rating}`,
+          r.restaurant.blurb,
+          r.best
+            ? `Best parking: ${r.best.park.parking.name} — ${r.best.walkM} m walk, ₹${r.best.park.cost}, ${r.best.park.availabilityPct}% free (simulated)`
+            : "No authorised parking within your budget and walking limit",
+        ],
       }))
     : [];
   const parkPins: MapPin[] = showPark
@@ -87,7 +91,14 @@ function MapScreen() {
         lat: p.parking.lat,
         lng: p.parking.lng,
         status: p.status,
-        popup: p.open ? `${p.parking.kind} · ~${p.freeSpots} free (simulated) · ₹${p.cost}` : "Closed at your arrival time",
+        popupLines: [
+          `✓ Verified authorised parking · ${p.parking.operator}`,
+          p.open
+            ? `Simulated availability: ${p.availabilityPct}% (~${p.freeSpots} of ${p.parking.capacity} spots)`
+            : `Not available for your stay (open ${hoursText(p.parking)})`,
+          `Charges: ${chargesText(p.parking)} → ₹${p.cost} for ${c.hours} h`,
+          p.open ? `Expected search time: ~${p.searchMin} min` : "",
+        ].filter(Boolean),
       }))
     : [];
 
@@ -99,17 +110,31 @@ function MapScreen() {
         ]
       : null;
 
-  const selectRestaurant = (id: string) => {
+  const isDesktop = () => typeof window !== "undefined" && window.matchMedia("(min-width: 1024px)").matches;
+  const showMap = () => {
+    if (!isDesktop()) document.getElementById("pw-map")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+  const selectRestaurant = (id: string, fromList = false) => {
     setSelR(id);
     setSelP(null);
     setTab("restaurants");
-    document.getElementById(`r-${id}`)?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    if (fromList) showMap();
+    else if (isDesktop()) document.getElementById(`r-${id}`)?.scrollIntoView({ behavior: "smooth", block: "nearest" });
   };
-  const selectParking = (id: string) => {
+  const selectParking = (id: string, fromList = false) => {
     setSelP(id);
     if (!selR) setTab("parking");
-    document.getElementById(`p-${id}`)?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    if (fromList) showMap();
+    else if (isDesktop()) document.getElementById(`p-${id}`)?.scrollIntoView({ behavior: "smooth", block: "nearest" });
   };
+  const clearSelection = () => {
+    setSelR(null);
+    setSelP(null);
+  };
+  const selectedPark = !selected && selP ? (ev.parkings.find((p) => p.parking.id === selP) ?? null) : null;
+  const servedBy = selectedPark
+    ? ev.restaurants.filter((r) => r.options.some((o) => o.park.parking.id === selectedPark.parking.id && o.eligible))
+    : [];
 
   return (
     <AppShell search={search}>
@@ -129,7 +154,7 @@ function MapScreen() {
 
         <div className="mt-4 grid gap-4 lg:grid-cols-[380px_1fr]">
           {/* Map first on mobile */}
-          <div className="relative order-1 lg:order-2">
+          <div id="pw-map" className="relative order-1 scroll-mt-28 lg:order-2">
             <MapView
               center={ev.area.center}
               zoom={ev.area.zoom}
@@ -138,9 +163,10 @@ function MapScreen() {
               parkings={parkPins}
               selectedRestaurantId={selR}
               selectedParkingId={selectedOption?.park.parking.id ?? selP}
-              onSelectRestaurant={selectRestaurant}
-              onSelectParking={selectParking}
+              onSelectRestaurant={(id) => selectRestaurant(id)}
+              onSelectParking={(id) => selectParking(id)}
               route={route}
+              showPopups={false}
               walkCircle={selected ? { center: [selected.restaurant.lat, selected.restaurant.lng], radius: c.walk / 1.3 } : null}
               className="h-[52vh] w-full overflow-hidden rounded-2xl border border-border shadow-[var(--shadow-card)] lg:h-[calc(100vh-220px)] lg:min-h-[560px]"
             />
@@ -159,35 +185,80 @@ function MapScreen() {
               </div>
             </div>
             {selected && (
-              <div className="absolute inset-x-3 bottom-16 z-[500] rounded-2xl border border-border bg-card p-4 shadow-[var(--shadow-float)] sm:left-auto sm:w-80">
+              <div className="relative z-[500] mt-3 rounded-2xl border border-border bg-card p-4 shadow-[var(--shadow-float)] sm:absolute sm:bottom-16 sm:right-3 sm:mt-0 sm:w-80">
                 <div className="flex items-start justify-between gap-2">
                   <div>
                     <div className="font-display text-base font-bold">{selected.restaurant.name}</div>
-                    <div className="text-xs text-muted-foreground">{selected.restaurant.cuisine} · ★ {selected.restaurant.rating}</div>
+                    <div className="text-xs text-muted-foreground">{selected.restaurant.cuisine} · {PRICE_LABEL[selected.restaurant.price]} · ★ {selected.restaurant.rating}</div>
+                    <div className="mt-1 text-xs text-muted-foreground">{selected.restaurant.blurb}</div>
                   </div>
-                  <button className="text-xs text-muted-foreground hover:text-foreground" onClick={() => { setSelR(null); setSelP(null); }} aria-label="Close">✕</button>
+                  <button className="rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground" onClick={clearSelection} aria-label="Close details"><X className="h-4 w-4" /></button>
                 </div>
                 {selectedOption ? (
                   <>
-                    <div className="mt-2 text-sm">
+                    <div className="mt-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                      {selectedOption === selected.best ? "Recommended parking" : "Selected parking"}
+                    </div>
+                    <div className="text-sm">
                       <span className="font-semibold">{selectedOption.park.parking.name}</span>
                       {!selectedOption.eligible && <span className="ml-1 text-xs text-busy">({selectedOption.issues[0]})</span>}
                     </div>
+                    <div className="flex items-center gap-1 text-[11px] text-muted-foreground"><ShieldCheck className="h-3 w-3 text-ok" /> Verified authorised · {selectedOption.park.parking.operator}</div>
                     <div className="mt-2 flex flex-wrap gap-2 text-xs">
                       <AvailabilityBadge status={selectedOption.park.status} pct={selectedOption.park.availabilityPct} />
                       <span className="inline-flex items-center gap-1"><Footprints className="h-3 w-3" />{selectedOption.walkM} m</span>
                       <span className="inline-flex items-center gap-1"><IndianRupee className="h-3 w-3" />{selectedOption.park.cost}</span>
                       <span className="inline-flex items-center gap-1"><Timer className="h-3 w-3" />~{selectedOption.park.searchMin} min search</span>
                     </div>
-                    <Button asChild size="sm" className="mt-3 w-full">
+                    <p className="mt-2 text-[11px] text-muted-foreground">Tap another P marker to compare parking for this restaurant.</p>
+                    <Button asChild size="sm" className="mt-2 w-full">
                       <Link to="/plan" search={{ ...search, restaurant: selected.restaurant.id, parking: selectedOption.eligible ? selectedOption.park.parking.id : "" }}>
                         Plan this visit <ArrowRight />
                       </Link>
                     </Button>
+                    <a
+                      href={walkingUrl(selectedOption.park.parking, selected.restaurant)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="mt-2 flex items-center justify-center gap-1 text-xs font-semibold text-primary hover:underline"
+                    >
+                      <Footprints className="h-3 w-3" /> Walking route from parking (Google Maps)
+                    </a>
                   </>
                 ) : (
                   <p className="mt-2 text-sm text-muted-foreground">No authorised parking fits your budget and walking limit. Try widening them.</p>
                 )}
+              </div>
+            )}
+            {selectedPark && (
+              <div className="relative z-[500] mt-3 rounded-2xl border border-border bg-card p-4 shadow-[var(--shadow-float)] sm:absolute sm:bottom-16 sm:right-3 sm:mt-0 sm:w-80">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-start gap-2">
+                    <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-ink font-display font-extrabold text-ink-foreground">P</span>
+                    <div>
+                      <div className="font-display text-base font-bold leading-tight">{selectedPark.parking.name}</div>
+                      <div className="mt-0.5 flex items-center gap-1 text-[11px] font-semibold text-ok"><ShieldCheck className="h-3 w-3" /> Verified authorised · {selectedPark.parking.operator}</div>
+                    </div>
+                  </div>
+                  <button className="rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground" onClick={clearSelection} aria-label="Close details"><X className="h-4 w-4" /></button>
+                </div>
+                <dl className="mt-3 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 text-xs">
+                  <dt className="text-muted-foreground">Availability</dt>
+                  <dd className="flex flex-wrap items-center gap-1.5"><AvailabilityBadge status={selectedPark.status} pct={selectedPark.availabilityPct} />{selectedPark.open && <span>~{selectedPark.freeSpots} of {selectedPark.parking.capacity} spots</span>}</dd>
+                  <dt className="text-muted-foreground">Charges</dt>
+                  <dd>{chargesText(selectedPark.parking)}</dd>
+                  <dt className="text-muted-foreground">Your stay</dt>
+                  <dd className="font-semibold">₹{selectedPark.cost} for {c.hours} h {selectedPark.cost > c.budget && <span className="font-normal text-busy">(over your ₹{c.budget} budget)</span>}</dd>
+                  <dt className="text-muted-foreground">Search time</dt>
+                  <dd>{selectedPark.open ? `~${selectedPark.searchMin} min (simulated)` : "—"}</dd>
+                  <dt className="text-muted-foreground">Open</dt>
+                  <dd>{hoursText(selectedPark.parking)} · {selectedPark.parking.kind}</dd>
+                  <dt className="text-muted-foreground">Fits for</dt>
+                  <dd>{servedBy.length ? `${servedBy.length} restaurant${servedBy.length > 1 ? "s" : ""} within your limits` : "No restaurants within your limits"}</dd>
+                </dl>
+                <Button asChild size="sm" variant="signal" className="mt-3 w-full">
+                  <a href={directionsUrl(selectedPark.parking.lat, selectedPark.parking.lng)} target="_blank" rel="noopener noreferrer"><Navigation /> Directions in Google Maps</a>
+                </Button>
               </div>
             )}
           </div>
@@ -235,7 +306,7 @@ function MapScreen() {
                   <button
                     key={r.restaurant.id}
                     id={`r-${r.restaurant.id}`}
-                    onClick={() => selectRestaurant(r.restaurant.id)}
+                    onClick={() => selectRestaurant(r.restaurant.id, true)}
                     className={cn(
                       "w-full rounded-xl border bg-card p-3 text-left transition hover:border-primary/50",
                       selR === r.restaurant.id ? "border-primary ring-2 ring-primary/20" : "border-border",
@@ -267,7 +338,7 @@ function MapScreen() {
                   <button
                     key={p.parking.id}
                     id={`p-${p.parking.id}`}
-                    onClick={() => selectParking(p.parking.id)}
+                    onClick={() => { setSelR(null); selectParking(p.parking.id, true); }}
                     className={cn("w-full rounded-xl border bg-card p-3 text-left transition hover:border-primary/50", selP === p.parking.id ? "border-primary ring-2 ring-primary/20" : "border-border")}
                   >
                     <div className="flex items-start justify-between gap-2">
@@ -284,7 +355,7 @@ function MapScreen() {
                       <span>~{p.freeSpots}/{p.parking.capacity} free</span>
                       <span>₹{p.cost} for {c.hours} h</span>
                       <span>~{p.searchMin} min search</span>
-                      <span>Open {p.parking.openFrom}:00–{p.parking.openTo === 24 ? "24" : p.parking.openTo}:00</span>
+                      <span>Open {hoursText(p.parking)}</span>
                     </div>
                   </button>
                 ))}

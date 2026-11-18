@@ -31,3 +31,47 @@ describe("ParkWise recommendation rules", () => {
     expect(ev.parkings.find((p) => p.parking.id === "hkv-p-gate")!.cost).toBe(100);
   });
 });
+
+describe("ParkWise data consistency", () => {
+  const times = ["09:00", "13:00", "19:30", "21:00"];
+  const areas = ["hkv", "khan", "cp"];
+
+  it("keeps free spots, capacity and availability % in agreement", () => {
+    for (const area of areas)
+      for (const time of times) {
+        const ev = evaluateArea(toCriteria({ area, time, day: "weekend", hours: 2, budget: 400, walk: 1500 }));
+        for (const p of ev.parkings) {
+          expect(p.freeSpots).toBeLessThanOrEqual(p.parking.capacity);
+          expect(p.availabilityPct).toBe(p.open ? Math.round((p.freeSpots / p.parking.capacity) * 100) : 0);
+        }
+      }
+  });
+
+  it("gives busier facilities a longer or equal search time", () => {
+    const ev = evaluateArea(base);
+    const open = ev.parkings.filter((p) => p.open).sort((a, b) => a.occupancy - b.occupancy);
+    for (let i = 1; i < open.length; i++) expect(open[i]!.searchMin).toBeGreaterThanOrEqual(open[i - 1]!.searchMin);
+  });
+
+  it("keeps every score between 0 and 100 and ranks picks best-first", () => {
+    const rec = topRecommendations({ ...base, budget: 400, walk: 1500 });
+    const scores = rec.top.map((r) => r.best!.score);
+    for (const s of scores) expect(s).toBeGreaterThanOrEqual(0), expect(s).toBeLessThanOrEqual(100);
+    expect([...scores].sort((a, b) => b - a)).toEqual(scores);
+  });
+
+  it("rejects parking that closes before the stay ends", () => {
+    // Deer Park Gate closes at 22:00; a 3 h stay from 20:00 must not use it
+    const ev = evaluateArea(toCriteria({ area: "hkv", time: "20:00", day: "weekend", hours: 3, budget: 400, walk: 1500 }));
+    const deer = ev.parkings.find((p) => p.parking.id === "hkv-p-deer")!;
+    expect(deer.open).toBe(false);
+    for (const r of ev.restaurants) expect(r.best?.park.parking.id).not.toBe("hkv-p-deer");
+  });
+
+  it("changes availability when arrival time changes", () => {
+    const morning = evaluateArea(toCriteria({ area: "hkv", time: "10:00", day: "weekend", hours: 2, budget: 150, walk: 600 }));
+    const evening = evaluateArea(toCriteria({ area: "hkv", time: "20:00", day: "weekend", hours: 2, budget: 150, walk: 600 }));
+    const gate = (e: typeof morning) => e.parkings.find((p) => p.parking.id === "hkv-p-gate")!.availabilityPct;
+    expect(gate(morning)).toBeGreaterThan(gate(evening));
+  });
+});

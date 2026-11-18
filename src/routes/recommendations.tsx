@@ -1,13 +1,15 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { useEffect, useState } from "react";
 import { zodValidator } from "@tanstack/zod-adapter";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { ArrowRight, BrainCircuit, Car, Footprints, IndianRupee, Lightbulb, Map as MapIcon, RefreshCw, ShieldCheck, Star, Timer } from "lucide-react";
+import { ArrowRight, BrainCircuit, Medal, Loader2, Car, Footprints, IndianRupee, Lightbulb, Map as MapIcon, RefreshCw, ShieldCheck, Star, Timer } from "lucide-react";
 import { AppShell, SimulatedNotice } from "@/components/AppShell";
 import { AvailabilityBadge, CriteriaBar, ScoreRing, Stat } from "@/components/parking-ui";
 import { Button } from "@/components/ui/button";
-import { Skeleton } from "@/components/ui/skeleton";
+import { TripAdjuster } from "@/components/TripAdjuster";
 import { topRecommendations, WEIGHTS } from "@/lib/engine";
+import { ruleBasedExplanation } from "@/lib/explain";
 import { explainRecommendations } from "@/lib/recommend.functions";
 import { cleanSearch, criteriaSearchSchema, toCriteria } from "@/lib/search";
 import { PRICE_LABEL } from "@/lib/ui-helpers";
@@ -36,19 +38,40 @@ const FACTORS = [
 
 function RecommendationsScreen() {
   const search = cleanSearch(Route.useSearch());
+  const navigate = useNavigate({ from: "/recommendations" });
   const c = toCriteria(search);
   const rec = topRecommendations(c, 3);
+  const rules = ruleBasedExplanation(c);
   const explain = useServerFn(explainRecommendations);
 
+  // Wait for the user to stop adjusting before asking the AI again.
+  const searchKey = JSON.stringify(search);
+  const [aiKey, setAiKey] = useState(searchKey);
+  useEffect(() => {
+    const t = setTimeout(() => setAiKey(searchKey), 700);
+    return () => clearTimeout(t);
+  }, [searchKey]);
+
   const ai = useQuery({
-    queryKey: ["explain", search],
-    queryFn: () => explain({ data: search }),
+    queryKey: ["explain", aiKey],
+    queryFn: () => explain({ data: JSON.parse(aiKey) }),
     enabled: rec.top.length > 0,
     staleTime: Infinity,
     retry: false,
   });
+  const aiFresh = aiKey === searchKey && !!ai.data;
+  const aiWorking = rec.top.length > 0 && (ai.isFetching || aiKey !== searchKey);
+  const explanation = aiFresh && ai.data ? ai.data : null;
+  const summary = explanation?.summary ?? rules.summary;
 
-  const excluded = rec.restaurants.filter((r) => !r.eligible);
+  const update = (patch: Partial<typeof search>) =>
+    navigate({ search: (prev) => cleanSearch({ ...prev, ...patch }), replace: true, resetScroll: false });
+
+  const topIds = new Set(rec.top.map((r) => r.restaurant.id));
+  const thirdScore = rec.top[rec.top.length - 1]?.best?.score ?? 0;
+  const excluded = rec.restaurants
+    .filter((r) => !topIds.has(r.restaurant.id))
+    .sort((a, b) => (b.best?.score ?? -1) - (a.best?.score ?? -1));
 
   return (
     <AppShell search={search}>
@@ -65,6 +88,7 @@ function RecommendationsScreen() {
           </Button>
         </div>
         <div className="mt-3"><CriteriaBar search={search} /></div>
+        <div className="mt-4"><TripAdjuster search={search} onChange={update} /></div>
 
         {rec.top.length === 0 ? (
           <div className="mt-8 rounded-2xl border border-dashed border-border bg-card p-8 text-center">
@@ -82,19 +106,23 @@ function RecommendationsScreen() {
                 <div className="flex items-start gap-3">
                   <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-gradient-primary text-primary-foreground"><BrainCircuit className="h-5 w-5" /></span>
                   <div className="min-w-0">
-                    <div className="text-xs font-semibold text-accent-foreground">ParkWise AI summary</div>
-                    {ai.isLoading ? (
-                      <div className="mt-2 space-y-2"><Skeleton className="h-4 w-80 max-w-full" /><Skeleton className="h-4 w-60 max-w-full" /></div>
-                    ) : ai.isError ? (
-                      <p className="mt-1 text-sm">The AI explanation could not load. Rankings below are still accurate.</p>
-                    ) : (
-                      <p className="mt-1 text-sm">{ai.data?.summary}</p>
-                    )}
-                    {ai.data?.note && <p className="mt-1 text-xs text-muted-foreground">{ai.data.note}</p>}
+                    <div className="flex flex-wrap items-center gap-2 text-xs font-semibold text-accent-foreground">
+                      ParkWise AI summary
+                      {aiWorking ? (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-card px-2 py-0.5 font-medium text-muted-foreground"><Loader2 className="h-3 w-3 animate-spin" /> AI is writing a fresh explanation…</span>
+                      ) : explanation?.source === "ai" ? (
+                        <span className="rounded-full bg-card px-2 py-0.5 font-medium text-muted-foreground">Written by AI from the numbers below</span>
+                      ) : (
+                        <span className="rounded-full bg-card px-2 py-0.5 font-medium text-muted-foreground">Rule-based</span>
+                      )}
+                    </div>
+                    <p className="mt-1 text-sm">{summary}</p>
+                    {ai.isError && !aiWorking && <p className="mt-1 text-xs text-muted-foreground">The AI explanation couldn't load — showing rule-based reasoning. Try Regenerate.</p>}
+                    {explanation?.note && <p className="mt-1 text-xs text-muted-foreground">{explanation.note}</p>}
                   </div>
                 </div>
-                <Button variant="ghost" size="sm" onClick={() => ai.refetch()} disabled={ai.isFetching} aria-label="Regenerate explanation">
-                  <RefreshCw className={ai.isFetching ? "animate-spin" : ""} />
+                <Button variant="ghost" size="sm" onClick={() => ai.refetch()} disabled={aiWorking} aria-label="Regenerate explanation">
+                  <RefreshCw className={aiWorking ? "animate-spin" : ""} />
                   <span className="hidden sm:inline">Regenerate</span>
                 </Button>
               </div>
@@ -103,7 +131,8 @@ function RecommendationsScreen() {
             <div className="mt-5 grid gap-4 lg:grid-cols-3">
               {rec.top.map((r, i) => {
                 const o = r.best!;
-                const exp = ai.data?.picks.find((p) => p.id === r.restaurant.id);
+                const exp = explanation?.picks.find((p) => p.id === r.restaurant.id) ?? rules.picks.find((p) => p.id === r.restaurant.id);
+                const rankReason = rules.picks[i]?.rankReason;
                 return (
                   <article key={r.restaurant.id} className="flex flex-col rounded-3xl border border-border bg-card p-5 shadow-[var(--shadow-card)]">
                     <div className="flex items-start justify-between gap-3">
@@ -146,21 +175,23 @@ function RecommendationsScreen() {
                       ))}
                     </div>
 
-                    <div className="mt-4 flex-1 rounded-xl bg-muted/60 p-3">
+                    {rankReason && (
+                      <div className="mt-4 flex gap-2 rounded-xl border border-primary/20 bg-accent/50 p-3 text-xs text-accent-foreground">
+                        <Medal className="mt-0.5 h-4 w-4 shrink-0" />
+                        <p><span className="font-semibold">Why #{i + 1}: </span>{rankReason}</p>
+                      </div>
+                    )}
+
+                    <div className="mt-3 flex-1 rounded-xl bg-muted/60 p-3">
                       <div className="flex items-center gap-1.5 text-xs font-semibold text-primary"><BrainCircuit className="h-3.5 w-3.5" /> Why we recommend it</div>
-                      {ai.isLoading ? (
-                        <div className="mt-2 space-y-1.5"><Skeleton className="h-3 w-full" /><Skeleton className="h-3 w-11/12" /><Skeleton className="h-3 w-2/3" /></div>
-                      ) : exp ? (
+                      {exp && (
                         <>
                           <p className="mt-1 text-sm font-semibold">{exp.headline}</p>
                           <p className="mt-1 text-sm text-muted-foreground">{exp.reasoning}</p>
                           <p className="mt-2 flex gap-1.5 text-xs"><Lightbulb className="mt-0.5 h-3.5 w-3.5 shrink-0 text-signal" />{exp.tip}</p>
                         </>
-                      ) : (
-                        <p className="mt-1 text-sm text-muted-foreground">
-                          {o.park.availabilityPct}% simulated availability, ₹{o.park.cost} parking and a {o.walkM} m walk — all within your limits.
-                        </p>
                       )}
+                      {aiWorking && <p className="mt-2 flex items-center gap-1 text-[11px] text-muted-foreground"><Loader2 className="h-3 w-3 animate-spin" /> Updating with AI…</p>}
                     </div>
 
                     <Button asChild variant={i === 0 ? "signal" : "default"} className="mt-4 w-full">
@@ -177,7 +208,7 @@ function RecommendationsScreen() {
 
         {excluded.length > 0 && (
           <details className="mt-6 rounded-2xl border border-border bg-card p-4">
-            <summary className="cursor-pointer text-sm font-semibold">Why other restaurants weren't picked ({excluded.length})</summary>
+            <summary className="cursor-pointer text-sm font-semibold">Why other restaurants aren't in the top three ({excluded.length})</summary>
             <ul className="mt-3 space-y-2 text-sm">
               {excluded.map((r) => {
                 const closest = [...r.options].sort((a, b) => a.walkM - b.walkM)[0];
@@ -185,7 +216,11 @@ function RecommendationsScreen() {
                   <li key={r.restaurant.id} className="flex flex-col gap-0.5 sm:flex-row sm:items-center sm:justify-between">
                     <span className="font-medium">{r.restaurant.name}</span>
                     <span className="text-xs text-muted-foreground">
-                      {closest ? `Nearest: ${closest.park.parking.name} — ${closest.issues.join("; ")}` : "No authorised parking nearby"}
+                      {r.best
+                        ? `Fits your limits but scores ${r.best.score}/100 (vs ${thirdScore} for #3) with ${r.best.park.parking.name}`
+                        : closest
+                          ? `No parking fits — nearest: ${closest.park.parking.name}: ${closest.issues.join("; ")}`
+                          : "No authorised parking nearby"}
                     </span>
                   </li>
                 );
