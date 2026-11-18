@@ -86,16 +86,22 @@ function demandAt(area: Area, day: DayType, minutes: number) {
   return a + (b - a) * t;
 }
 
-function isOpen(p: Parking, minutes: number, hours: number) {
+/** The whole stay must fall inside opening hours, otherwise the car could be locked in. */
+export function isOpenForStay(p: Parking, minutes: number, hours: number) {
   const start = minutes / 60;
-  return start >= p.openFrom && start + Math.min(hours, 1) <= p.openTo;
+  return start >= p.openFrom && start + hours <= p.openTo;
+}
+
+export function formatHour(h: number) {
+  return h >= 24 ? "midnight" : formatTime(Math.round(h * 60));
 }
 
 export function evaluateParking(area: Area, p: Parking, c: Criteria): ParkingEval {
-  const open = isOpen(p, c.arrival, c.hours);
+  const open = isOpenForStay(p, c.arrival, c.hours);
   const occupancy = Math.min(0.99, Math.max(0.03, demandAt(area, c.day, c.arrival) * p.demandFactor));
-  const availabilityPct = open ? Math.round((1 - occupancy) * 100) : 0;
+  // Spots first, then % from spots, so "x free of capacity" and "% free" always agree.
   const freeSpots = open ? Math.max(0, Math.round(p.capacity * (1 - occupancy))) : 0;
+  const availabilityPct = open ? Math.round((freeSpots / p.capacity) * 100) : 0;
   // Expected minutes spent queuing / circling inside the facility
   const searchMin = open ? Math.round(1 + 14 * occupancy ** 4 + (occupancy > 0.9 ? 5 : 0)) : 99;
   const status: ParkingStatus = !open
@@ -109,7 +115,7 @@ export function evaluateParking(area: Area, p: Parking, c: Criteria): ParkingEva
 }
 
 function scoreOption(pe: ParkingEval, walkM: number, c: Criteria) {
-  const availability = pe.availabilityPct / 100;
+  const availability = pe.open ? pe.availabilityPct / 100 : 0;
   const cost = c.budget > 0 ? Math.max(0, 1 - pe.cost / c.budget) : pe.cost === 0 ? 1 : 0;
   const walk = Math.max(0, 1 - walkM / Math.max(c.walk, 1));
   const search = Math.max(0, 1 - Math.min(pe.searchMin, 20) / 20);
@@ -130,7 +136,14 @@ export function evaluateArea(c: Criteria): AreaEval {
       .map<Option>((pe) => {
         const walkM = walkingDistanceM(r, pe.parking);
         const issues: string[] = [];
-        if (!pe.open) issues.push("Closed at your arrival time");
+        if (!pe.open) {
+          const start = c.arrival / 60;
+          issues.push(
+            start < pe.parking.openFrom
+              ? `Opens at ${formatHour(pe.parking.openFrom)}, after you arrive`
+              : `Closes at ${formatHour(pe.parking.openTo)}, before your ${c.hours} h stay ends`,
+          );
+        }
         if (walkM > c.walk) issues.push(`Walk ${walkM} m exceeds your ${c.walk} m limit`);
         if (pe.cost > c.budget) issues.push(`₹${pe.cost} exceeds your ₹${c.budget} budget`);
         if (pe.open && pe.freeSpots === 0) issues.push("Expected to be full");
@@ -164,6 +177,92 @@ export function topRecommendations(c: Criteria, n = 3) {
     .filter((r) => r.eligible && r.best)
     .sort((a, b) => b.best!.score - a.best!.score || b.restaurant.rating - a.restaurant.rating);
   return { ...ev, top: ranked.slice(0, n), rankedCount: ranked.length };
+}
+
+const FACTOR_LABEL = {
+  availability: "simulated availability",
+  cost: "parking cost",
+  walk: "walking distance",
+  search: "search time",
+} as const;
+type FactorKey = keyof typeof FACTOR_LABEL;
+
+/** Weighted points each factor contributes to an option's score. */
+export function contributions(o: Option): Record<FactorKey, number> {
+  return {
+    availability: 100 * WEIGHTS.availability * o.breakdown.availability,
+    cost: 100 * WEIGHTS.cost * o.breakdown.cost,
+    walk: 100 * WEIGHTS.walk * o.breakdown.walk,
+    search: 100 * WEIGHTS.search * o.breakdown.search,
+  };
+}
+
+function describeFactor(k: FactorKey, a: Option, b: Option) {
+  switch (k) {
+    case "availability":
+      return `${Math.abs(a.park.availabilityPct - b.park.availabilityPct)} points ${a.park.availabilityPct > b.park.availabilityPct ? "more" : "less"} simulated availability`;
+    case "cost":
+      return `₹${Math.abs(a.park.cost - b.park.cost)} ${a.park.cost < b.park.cost ? "cheaper" : "dearer"} parking`;
+    case "walk":
+      return `${Math.abs(a.walkM - b.walkM)} m ${a.walkM < b.walkM ? "shorter" : "longer"} walk`;
+    case "search":
+      return `${Math.abs(a.park.searchMin - b.park.searchMin)} min ${a.park.searchMin < b.park.searchMin ? "less" : "more"} searching`;
+  }
+}
+
+/** Biggest factor where `a` beats `b` (or loses to it with sign = -1). */
+function keyFactor(a: Option, b: Option, sign: 1 | -1): FactorKey | null {
+  const ca = contributions(a);
+  const cb = contributions(b);
+  let best: FactorKey | null = null;
+  let bestGap = 0.5; // ignore sub-point differences
+  for (const k of Object.keys(FACTOR_LABEL) as FactorKey[]) {
+    const gap = sign * (ca[k] - cb[k]);
+    if (gap > bestGap) {
+      bestGap = gap;
+      best = k;
+    }
+  }
+  return best;
+}
+
+/**
+ * Plain-language reason for each rank, comparing every pick with its neighbours.
+ * `ranked` must be sorted best-first and contain only eligible restaurants.
+ */
+export function rankReasons(ranked: RestaurantEval[], n = 3): string[] {
+  return ranked.slice(0, n).map((r, i) => {
+    const o = r.best!;
+    const above = i > 0 ? ranked[i - 1] : undefined;
+    const below = ranked[i + 1];
+    const parts: string[] = [];
+    if (!above) {
+      parts.push(`Ranked #1 with the highest score (${o.score}/100)`);
+    } else {
+      const ao = above.best!;
+      if (ao.score === o.score) {
+        parts.push(`Ranked #${i + 1}: ties with ${above.restaurant.name} on ${o.score}/100 but has a lower rating (${r.restaurant.rating} vs ${above.restaurant.rating})`);
+      } else {
+        const lose = keyFactor(o, ao, -1);
+        parts.push(
+          `Ranked #${i + 1} (${o.score}/100), ${ao.score - o.score} points behind ${above.restaurant.name}` +
+            (lose ? ` mainly due to ${describeFactor(lose, o, ao)}` : ""),
+        );
+      }
+    }
+    if (below?.best) {
+      const bo = below.best;
+      if (bo.score === o.score) {
+        parts.push(`edges ${below.restaurant.name} on rating (${r.restaurant.rating} vs ${below.restaurant.rating})`);
+      } else {
+        const win = keyFactor(o, bo, 1);
+        parts.push(
+          `ahead of ${below.restaurant.name} by ${o.score - bo.score} points` + (win ? ` thanks to ${describeFactor(win, o, bo)}` : ""),
+        );
+      }
+    }
+    return parts.join("; ") + ".";
+  });
 }
 
 export function formatTime(minutes: number) {
