@@ -28,3 +28,10 @@ use the editor.
   own key and store it in Secrets.
 - **Secrets.** Lovable manages them. Do not put secret values in the repo.
 <!-- LOVABLE:END -->
+
+## Project rules
+
+- Recommendation scoring lives in pure `src/lib/engine.ts` and is shared by the UI and the AI server function; the server recomputes picks so the AI only explains verified parking that passed every filter.
+- Sample data lives in `src/lib/data.ts`; parking with `verified: false` must never reach recommendations (covered by `src/test/recommend.test.ts`).
+- Trip criteria travel between screens as validated URL search params (`src/lib/search.ts`), so every screen is shareable and needs no login or storage.
+- Leaflet is browser-only: import it only in `src/components/ParkMap.tsx`, loaded lazily through `MapView` behind `ClientOnly`.
