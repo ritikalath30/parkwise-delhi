@@ -9,7 +9,11 @@ export type TripIntent = {
 };
 
 export function parseTripRules(text: string): TripIntent {
-  const t = ` ${text.toLowerCase()} `;
+  const W: Record<string, string> = { one: "1", two: "2", three: "3", four: "4", five: "5", six: "6", an: "1", a: "1" };
+  // spoken numbers ("for two hours") → digits; generic filler before the place ("a restaurant in Bandra") removed
+  const t = ` ${text.toLowerCase()} `
+    .replace(/\b(one|two|three|four|five|six|an|a)\s+(hours?|hrs?)\b/g, (_, n: string, u: string) => `${W[n]} ${u}`)
+    .replace(/\b(?:(?:near|at|to|around)\s+)?(?:a|an|the|some|any)\s+(?:good\s+|nice\s+)?(?:restaurant|cafe|café|place|spot|eatery)\s+(?=(?:in|at|near|around)\b)/g, "");
   const out: TripIntent = { place: null, time: null, hours: null, budget: null, walk: null, pref: null };
 
   const tm = /\b(?:at|by|around)\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\b/.exec(t) ?? /\b(\d{1,2})(?::(\d{2}))?\s*(am|pm)\b/.exec(t);

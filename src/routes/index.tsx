@@ -1,7 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { zodValidator } from "@tanstack/zod-adapter";
 import { useState } from "react";
-import { ArrowRight, Car, Footprints, MapPinned, Route as RouteIcon } from "lucide-react";
+import { ArrowRight, Car, Footprints, MapPinned, Route as RouteIcon, Sparkles } from "lucide-react";
 import heroImg from "@/assets/hauz-khas-dusk.jpg";
 import { Logo, SiteFooter, StepNav } from "@/components/AppShell";
 import { AiTripBox } from "@/components/AiTripBox";
@@ -76,9 +76,9 @@ function SearchScreen() {
 
               }}
             />
-            {ready && (
-            <details className="group">
-              <summary className="cursor-pointer text-xs font-semibold text-muted-foreground">Check or adjust what the AI understood ▾</summary>
+            {(
+            <details className="group" data-testid="manual-plan">
+              <summary className="cursor-pointer text-xs font-semibold text-muted-foreground">{ready ? "Check or adjust what the AI understood ▾" : "Check or adjust what the AI understood · or fill in the details yourself ▾"}</summary>
               <div className="mt-3 space-y-4">
             <h2 className="text-lg font-bold">Where are you eating?</h2>
             <DestinationSearch
@@ -87,6 +87,9 @@ function SearchScreen() {
               onSelect={(r) => setForm((f) => ({ ...f, q: r.detail ? `${r.label}, ${r.detail.split(", ").slice(0, 2).join(", ")}` : r.label, lat: r.lat, lng: r.lng }))}
             />
             <TripAdjuster search={form} onChange={(patch) => setForm((f) => cleanSearch({ ...f, ...patch }))} />
+            <Button type="submit" variant="signal" className="w-full" data-testid="manual-go" disabled={!ready}>
+              <Sparkles /> {ready ? "Plan with AI" : "Choose a destination above to plan"}
+            </Button>
               </div>
             </details>
             )}

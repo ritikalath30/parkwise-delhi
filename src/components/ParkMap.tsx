@@ -37,6 +37,18 @@ function icon(kind: "dine" | "park", pin: MapPin, active: boolean) {
 
 type Entry = { marker: L.Marker; pin: MapPin; kind: "dine" | "park" };
 
+const AVAIL_TEXT = { low: "likely spaces", moderate: "moderately busy", high: "busy", "very-high": "very busy" } as const;
+function popupHtml(kind: "dine" | "park", pin: MapPin, from: MapPin | null) {
+  if (kind === "dine") return `<b>${esc(pin.name)}</b><br><span>Restaurant · selected to see parking around it</span>`;
+  const v = pin.variant ?? "paid";
+  const lines = [`<b>${esc(pin.name)}</b>`, `Car park · ${VARIANT_LABEL[v]}`];
+  if (pin.level) lines.push(`Availability: ${AVAIL_TEXT[pin.level]} (estimate from simulated demand, not live)`);
+  else lines.push("Availability: unknown");
+  if (from) lines.push(`~${Math.round(L.latLng(from.lat, from.lng).distanceTo([pin.lat, pin.lng]) / 10) * 10} m straight-line from ${esc(from.name)}`);
+  if (v !== "excluded") lines.push("<i>Selected: details are shown in the list.</i>");
+  return lines.join("<br>");
+}
+
 const BASES = {
   map: {
     url: "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
@@ -82,6 +94,8 @@ export default function ParkMap({
   const handlersRef = useRef({ onSelectRestaurant, onSelectParking });
   handlersRef.current = { onSelectRestaurant, onSelectParking };
   const selRef = useRef({ r: selectedRestaurantId, p: selectedParkingId });
+  const restaurantsRef = useRef(restaurants);
+  restaurantsRef.current = restaurants;
   selRef.current = { r: selectedRestaurantId, p: selectedParkingId };
   const [base, setBase] = useState<"map" | "satellite">("map");
   const [osmFailed, setOsmFailed] = useState(false);
@@ -106,7 +120,24 @@ export default function ParkMap({
             showCoverageOnHover: false,
             maxClusterRadius: 40,
             disableClusteringAtZoom: 18,
-            iconCreateFunction: (c) => L.divIcon({ className: "", html: `<div class="pw-cluster">${c.getChildCount()}</div>`, iconSize: [38, 38] }),
+            // A cluster groups nearby map pins; show what is inside (car parks vs restaurants), never free spaces.
+            iconCreateFunction: (c) => {
+              const kids = c.getAllChildMarkers() as (L.Marker & { pwKind?: string })[];
+              const parks = kids.filter((m) => m.pwKind === "park").length;
+              const dine = kids.length - parks;
+              const part = (n: number, cls: string, sym: string) => (n ? `<span class="pw-cl ${cls}">${sym}<b>${n}</b></span>` : "");
+              return L.divIcon({
+                className: "",
+                html: `<div class="pw-cluster2" aria-label="${parks} car parks and ${dine} restaurants grouped here">${part(parks, "pw-cl-park", "P")}${part(dine, "pw-cl-dine", FORK_SVG)}</div>`,
+                iconSize: [parks && dine ? 84 : 46, 28],
+                iconAnchor: [parks && dine ? 42 : 23, 14],
+              });
+            },
+          }).on("clustermouseover", (e: L.LeafletEvent) => {
+            const c = e.layer as L.MarkerCluster;
+            const kids = c.getAllChildMarkers() as (L.Marker & { pwKind?: string })[];
+            const parks = kids.filter((m) => m.pwKind === "park").length;
+            c.bindTooltip(`${parks} car park${parks === 1 ? "" : "s"} · ${kids.length - parks} restaurant${kids.length - parks === 1 ? "" : "s"} grouped here. Click to zoom in.`, { direction: "top" }).openTooltip();
           })
         : L.layerGroup()
     ).addTo(map);
@@ -172,9 +203,12 @@ export default function ParkMap({
         continue;
       }
       const marker = L.marker([pin.lat, pin.lng], { icon: icon(kind, pin, active), zIndexOffset: kind === "dine" ? 300 : 200, title: pin.name, keyboard: true, riseOnHover: true })
-        .bindTooltip(esc(kind === "park" ? `${pin.name} · ${VARIANT_LABEL[pin.variant ?? "paid"]}` : pin.name), { direction: "top", offset: [0, -16] });
+        .bindTooltip(esc(kind === "park" ? `${pin.name} · ${VARIANT_LABEL[pin.variant ?? "paid"]}` : pin.name), { direction: "top", offset: [0, -16] })
+        .bindPopup("", { offset: [0, -12] });
+      (marker as L.Marker & { pwKind?: string }).pwKind = kind;
       (active ? pinned : layer).addLayer(marker);
       marker.on("click", () => {
+        marker.setPopupContent(popupHtml(kind, entriesRef.current.get(key)?.pin ?? pin, selRef.current.r ? restaurantsRef.current.find((r) => r.id === selRef.current.r) ?? null : null));
         if (kind === "dine") handlersRef.current.onSelectRestaurant?.(pin.id);
         else handlersRef.current.onSelectParking?.(pin.id);
       });

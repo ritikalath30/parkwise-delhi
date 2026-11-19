@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Loader2, Sparkles } from "lucide-react";
+import { useRef, useState } from "react";
+import { Loader2, Mic, Sparkles, Square } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { CleanSearch } from "@/lib/search";
 import { mergeIntent, understandIntent, type SemanticMatch } from "@/lib/ai/semantic";
@@ -18,6 +18,50 @@ export function AiTripBox({ onResult, onGo, date, time }: { onResult: (patch: Pa
   const [msg, setMsg] = useState<{ ok: boolean; text: string; source?: string; why?: SemanticMatch[] } | null>(null);
   const [stage, setStage] = useState("");
   const [ready, setReady] = useState(false);
+  // Voice input: browser speech recognition (free, no external API). Fills the same text box; the user edits, then plans.
+  const [listening, setListening] = useState(false);
+  const [voiceMsg, setVoiceMsg] = useState("");
+  const recRef = useRef<{ stop: () => void } | null>(null);
+  const toggleVoice = () => {
+    if (listening) {
+      recRef.current?.stop();
+      return;
+    }
+    const w = window as unknown as { SpeechRecognition?: new () => SpeechRec; webkitSpeechRecognition?: new () => SpeechRec };
+    const SR = w.SpeechRecognition ?? w.webkitSpeechRecognition;
+    if (!SR) {
+      setVoiceMsg("Voice input isn't supported in this browser. Try Chrome or Edge, or type your plan.");
+      return;
+    }
+    const rec = new SR();
+    rec.lang = "en-IN";
+    rec.interimResults = true;
+    rec.continuous = false;
+    const before = text.trim();
+    rec.onresult = (e) => {
+      const said = Array.from(e.results).map((r) => r[0]?.transcript ?? "").join(" ").trim();
+      setText(before ? `${before} ${said}` : said);
+    };
+    rec.onerror = (e) => {
+      setVoiceMsg(
+        e.error === "not-allowed" || e.error === "service-not-allowed"
+          ? "Microphone permission was denied. Allow it in your browser settings, or type your plan."
+          : e.error === "no-speech"
+            ? "Didn't hear anything. Tap the mic to try again."
+            : "Couldn't transcribe that. Tap the mic to retry, or type your plan.",
+      );
+    };
+    rec.onend = () => setListening(false);
+    recRef.current = rec;
+    setVoiceMsg("");
+    setListening(true);
+    try {
+      rec.start();
+    } catch {
+      setListening(false);
+      setVoiceMsg("Couldn't start the microphone. Tap to retry.");
+    }
+  };
 
   const run = async () => {
     if (text.trim().length < 3) return;
@@ -72,7 +116,7 @@ export function AiTripBox({ onResult, onGo, date, time }: { onResult: (patch: Pa
   };
 
   return (
-    <div className="space-y-2 rounded-xl border-2 border-primary/30 bg-accent/40 p-3" data-testid="ai-box">
+    <div className="relative space-y-2 rounded-xl border-2 border-primary/30 bg-accent/40 p-3" data-testid="ai-box">
       <label htmlFor="ai-trip" className="flex items-center gap-1.5 text-sm font-bold">
         <Sparkles className="h-4 w-4 text-primary" /> Describe your plan <span className="font-normal text-muted-foreground">— AI fills in everything</span>
       </label>
@@ -87,9 +131,24 @@ export function AiTripBox({ onResult, onGo, date, time }: { onResult: (patch: Pa
             void run();
           }
         }}
-        placeholder="e.g. Birthday dinner near Connaught Place at 8, happy to pay for parking, with my elderly parents"
-        className="w-full resize-none rounded-lg border border-input bg-card px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        placeholder="Type or tap the mic, e.g. Dinner near Connaught Place at 8, paid parking is fine, with my elderly parents"
+        className="w-full resize-none rounded-lg border border-input bg-card py-2 pl-3 pr-12 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
       />
+      <button
+        type="button"
+        onClick={toggleVoice}
+        aria-label={listening ? "Stop listening" : "Speak your plan"}
+        title={listening ? "Stop listening" : "Speak your plan"}
+        className={`absolute right-5 top-[46px] grid h-9 w-9 place-items-center rounded-full border ${listening ? "animate-pulse border-busy bg-busy text-white" : "border-border bg-card text-primary hover:bg-muted"}`}
+        data-testid="ai-mic"
+      >
+        {listening ? <Square className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
+      </button>
+      {(listening || voiceMsg) && (
+        <p className={listening ? "text-xs font-semibold text-primary" : "text-xs text-busy"} role="status" data-testid="ai-voice-status">
+          {listening ? "Listening… speak now, tap ■ to stop. You can edit the text before planning." : voiceMsg}
+        </p>
+      )}
       <Button type="button" onClick={run} disabled={busy || text.trim().length < 3} className="w-full">
         {busy ? <Loader2 className="animate-spin" /> : <Sparkles />} {busy ? stage || "Understanding your plan…" : "Plan it with AI"}
       </Button>
@@ -119,3 +178,14 @@ export function AiTripBox({ onResult, onGo, date, time }: { onResult: (patch: Pa
     </div>
   );
 }
+
+type SpeechRec = {
+  lang: string;
+  interimResults: boolean;
+  continuous: boolean;
+  onresult: ((e: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void) | null;
+  onerror: ((e: { error: string }) => void) | null;
+  onend: (() => void) | null;
+  start: () => void;
+  stop: () => void;
+};
