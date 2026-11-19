@@ -4,6 +4,7 @@ import { useState } from "react";
 import { ArrowRight, Car, Footprints, MapPinned, Route as RouteIcon } from "lucide-react";
 import heroImg from "@/assets/hauz-khas-dusk.jpg";
 import { Logo, SiteFooter, StepNav } from "@/components/AppShell";
+import { AiTripBox } from "@/components/AiTripBox";
 import { DestinationSearch } from "@/components/DestinationSearch";
 import { TripAdjuster } from "@/components/TripAdjuster";
 import { Button } from "@/components/ui/button";
@@ -65,10 +66,17 @@ function SearchScreen() {
               if (ready) navigate({ to: "/explore", search: form });
             }}
           >
+            <AiTripBox
+              onResult={(patch, go) => {
+                const next = cleanSearch({ ...form, ...patch });
+                setForm(next);
+                if (go && hasDestination(next)) setTimeout(() => navigate({ to: "/explore", search: next }), 900);
+              }}
+            />
+            <div className="flex items-center gap-3 text-xs text-muted-foreground"><span className="h-px flex-1 bg-border" />or fill in the details<span className="h-px flex-1 bg-border" /></div>
             <h2 className="text-lg font-bold">Where are you eating?</h2>
             <DestinationSearch
               value={form.q}
-              autoFocus
               bias={{ lat: 28.6139, lng: 77.209 }}
               onSelect={(r) => setForm((f) => ({ ...f, q: r.detail ? `${r.label}, ${r.detail.split(", ").slice(0, 2).join(", ")}` : r.label, lat: r.lat, lng: r.lng }))}
             />

@@ -3,6 +3,7 @@
 // and responses carry CDN cache headers in the API routes.
 import { haversineM } from "../geo";
 import delhi from "./delhi-osm.json";
+import gazetteer from "./delhi-gazetteer.json";
 import { normaliseOverpass, LIMITS, type OsmElement } from "./osm";
 import type { GeocodeResult, PlaceData } from "./types";
 
@@ -216,9 +217,52 @@ export const __resetLiveState = () => {
 type PhotonProps = Partial<Record<"name" | "housenumber" | "street" | "district" | "locality" | "city" | "county" | "state" | "country" | "osm_type" | "osm_id" | "osm_value" | "type", string>>;
 type PhotonFeature = { geometry: { coordinates: [number, number] }; properties: PhotonProps };
 
+const KIND_RANK: Record<string, number> = { suburb: 0, market: 0, mall: 1, landmark: 1, town: 1, village: 2, quarter: 2, neighbourhood: 2, locality: 3, "metro station": 4, restaurant: 5 };
+let localIndex: { name: string; lower: string; kind: string; lat: number; lng: number }[] | null = null;
+
+/** Instant, offline search over Delhi places (OSM snapshot) and the snapshot's restaurants. */
+export function localGeocode(q: string, limit = 7): GeocodeResult[] {
+  if (!localIndex) {
+    localIndex = (gazetteer as [string, string, number, number][]).map(([name, kind, lat, lng]) => ({ name, lower: name.toLowerCase(), kind, lat, lng }));
+    for (const e of delhi.elements as OsmElement[]) {
+      const n = e.tags?.name;
+      if (n && e.tags?.amenity !== "parking") localIndex.push({ name: n, lower: n.toLowerCase(), kind: "restaurant", lat: e.lat ?? e.center!.lat, lng: e.lon ?? e.center!.lon });
+    }
+  }
+  const qn = q.trim().toLowerCase().replace(/\s+/g, " ");
+  const tokens = qn.split(" ").filter(Boolean);
+  if (!tokens.length) return [];
+  const scored = localIndex
+    .filter((p) => tokens.every((t) => p.lower.includes(t)))
+    .map((p) => ({ p, score: (p.lower === qn ? 0 : p.lower.startsWith(qn) ? 10 : 20) + (KIND_RANK[p.kind] ?? 3) + p.lower.length / 100 }))
+    .sort((a, b) => a.score - b.score);
+  const seen = new Set<string>();
+  const out: GeocodeResult[] = [];
+  for (const { p } of scored) {
+    const key = `${p.lower}|${p.kind}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({ id: `local:${p.lower}:${p.kind}`, label: p.name, detail: "Delhi", lat: p.lat, lng: p.lng, kind: p.kind });
+    if (out.length >= limit) break;
+  }
+  return out;
+}
+
 export async function geocode(q: string, bias: { lat: number; lng: number } | null, f: typeof fetch = fetch): Promise<GeocodeResult[]> {
   const query = q.trim().slice(0, 120);
   if (query.length < 2) return [];
+  const local = localGeocode(query);
+  if (local.length >= 3) return local;
+  try {
+    const remote = await geocodeRemote(query, bias, f);
+    return [...local, ...remote.filter((r) => !local.some((l) => l.label.toLowerCase() === r.label.toLowerCase()))].slice(0, 7);
+  } catch (e) {
+    if (local.length) return local;
+    throw e;
+  }
+}
+
+async function geocodeRemote(query: string, bias: { lat: number; lng: number } | null, f: typeof fetch): Promise<GeocodeResult[]> {
   const key = `${query.toLowerCase()}|${bias ? `${bias.lat.toFixed(1)},${bias.lng.toFixed(1)}` : ""}`;
   const hit = geoCache.get(key);
   if (hit) return hit;
@@ -232,7 +276,7 @@ export async function geocode(q: string, bias: { lat: number; lng: number } | nu
     url.searchParams.set("lat", String(bias.lat));
     url.searchParams.set("lon", String(bias.lng));
   }
-  const res = await f(url, { headers: { "User-Agent": UA }, signal: AbortSignal.timeout(6000) });
+  const res = await f(url, { headers: { "User-Agent": UA }, signal: AbortSignal.timeout(4000) });
   if (!res.ok) throw new Error(`Geocoding HTTP ${res.status}`);
   const json = (await res.json()) as { features?: PhotonFeature[] };
   const seen = new Set<string>();

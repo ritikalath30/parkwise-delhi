@@ -14,6 +14,7 @@ import { Route as ExploreRouteImport } from './routes/explore'
 import { Route as MapRouteImport } from './routes/map'
 import { Route as PlanRouteImport } from './routes/plan'
 import { Route as RecommendationsRouteImport } from './routes/recommendations'
+import { Route as ApiAiSearchRouteImport } from './routes/api/ai-search'
 import { Route as ApiGeocodeRouteImport } from './routes/api/geocode'
 import { Route as ApiPlacesRouteImport } from './routes/api/places'
 
@@ -42,6 +43,11 @@ const RecommendationsRoute = RecommendationsRouteImport.update({
   path: '/recommendations',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiAiSearchRoute = ApiAiSearchRouteImport.update({
+  id: '/api/ai-search',
+  path: '/api/ai-search',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiGeocodeRoute = ApiGeocodeRouteImport.update({
   id: '/api/geocode',
   path: '/api/geocode',
@@ -59,6 +65,7 @@ export interface FileRoutesByFullPath {
   '/map': typeof MapRoute
   '/plan': typeof PlanRoute
   '/recommendations': typeof RecommendationsRoute
+  '/api/ai-search': typeof ApiAiSearchRoute
   '/api/geocode': typeof ApiGeocodeRoute
   '/api/places': typeof ApiPlacesRoute
 }
@@ -68,6 +75,7 @@ export interface FileRoutesByTo {
   '/map': typeof MapRoute
   '/plan': typeof PlanRoute
   '/recommendations': typeof RecommendationsRoute
+  '/api/ai-search': typeof ApiAiSearchRoute
   '/api/geocode': typeof ApiGeocodeRoute
   '/api/places': typeof ApiPlacesRoute
 }
@@ -78,6 +86,7 @@ export interface FileRoutesById {
   '/map': typeof MapRoute
   '/plan': typeof PlanRoute
   '/recommendations': typeof RecommendationsRoute
+  '/api/ai-search': typeof ApiAiSearchRoute
   '/api/geocode': typeof ApiGeocodeRoute
   '/api/places': typeof ApiPlacesRoute
 }
@@ -89,6 +98,7 @@ export interface FileRouteTypes {
     | '/map'
     | '/plan'
     | '/recommendations'
+    | '/api/ai-search'
     | '/api/geocode'
     | '/api/places'
   fileRoutesByTo: FileRoutesByTo
@@ -98,6 +108,7 @@ export interface FileRouteTypes {
     | '/map'
     | '/plan'
     | '/recommendations'
+    | '/api/ai-search'
     | '/api/geocode'
     | '/api/places'
   id:
@@ -107,6 +118,7 @@ export interface FileRouteTypes {
     | '/map'
     | '/plan'
     | '/recommendations'
+    | '/api/ai-search'
     | '/api/geocode'
     | '/api/places'
   fileRoutesById: FileRoutesById
@@ -117,6 +129,7 @@ export interface RootRouteChildren {
   MapRoute: typeof MapRoute
   PlanRoute: typeof PlanRoute
   RecommendationsRoute: typeof RecommendationsRoute
+  ApiAiSearchRoute: typeof ApiAiSearchRoute
   ApiGeocodeRoute: typeof ApiGeocodeRoute
   ApiPlacesRoute: typeof ApiPlacesRoute
 }
@@ -158,6 +171,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof RecommendationsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/ai-search': {
+      id: '/api/ai-search'
+      path: '/api/ai-search'
+      fullPath: '/api/ai-search'
+      preLoaderRoute: typeof ApiAiSearchRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/geocode': {
       id: '/api/geocode'
       path: '/api/geocode'
@@ -181,6 +201,7 @@ const rootRouteChildren: RootRouteChildren = {
   MapRoute: MapRoute,
   PlanRoute: PlanRoute,
   RecommendationsRoute: RecommendationsRoute,
+  ApiAiSearchRoute: ApiAiSearchRoute,
   ApiGeocodeRoute: ApiGeocodeRoute,
   ApiPlacesRoute: ApiPlacesRoute,
 }
