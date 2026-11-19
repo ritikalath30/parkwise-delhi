@@ -115,8 +115,8 @@ function ExploreScreen() {
 
         <div className="mt-3 grid gap-4 lg:grid-cols-[minmax(0,430px)_1fr]">
           <div className="relative order-1 lg:order-2">
-            <div className="lg:sticky lg:top-20">
-              <MapLegend layers={layers} setLayers={setLayers} excludedCount={data?.excluded.length ?? 0} />
+            <div className="relative lg:sticky lg:top-20">
+              <div className="pointer-events-none absolute inset-x-12 top-2 z-[1000] flex justify-center"><div className="pointer-events-auto"><MapLegend layers={layers} setLayers={setLayers} excludedCount={data?.excluded.length ?? 0} /></div></div>
               <MapView
                 center={[search.lat, search.lng]}
                 zoom={16}
@@ -130,7 +130,7 @@ function ExploreScreen() {
                 onSelectParking={selectParking}
                 route={routeQ.data?.coords ?? null}
                 cluster
-                className="h-[42vh] w-full overflow-hidden rounded-2xl border border-border shadow-[var(--shadow-card)] lg:h-[calc(100vh-180px)] lg:min-h-[560px]"
+                className="h-[42vh] w-full overflow-hidden rounded-2xl border border-border shadow-[var(--shadow-card)] lg:h-[calc(100vh-200px)] lg:min-h-[420px]"
               />
             </div>
           </div>
@@ -333,7 +333,7 @@ function MapLegend({ layers, setLayers, excludedCount }: { layers: Layers; setLa
     { key: "excluded", label: `Not public (${excludedCount})`, swatch: "bg-muted-foreground/40 rounded-sm" },
   ];
   return (
-    <div className="mb-2 rounded-xl border border-border bg-card px-3 py-2 text-[11px]" data-testid="legend">
+    <div className="rounded-xl border border-border bg-card/95 px-2 py-1.5 text-[11px] shadow-md backdrop-blur" data-testid="legend">
       <div className="flex flex-wrap items-center gap-1.5">
         {items.map((it) => (
           <button
@@ -348,7 +348,7 @@ function MapLegend({ layers, setLayers, excludedCount }: { layers: Layers; setLa
         ))}
       </div>
       <p className="mt-1 text-muted-foreground">
-        Dot on a P = availability (green likely spaces · amber moderate · red busy), predicted. Green areas on the base map are parks from OpenStreetMap — not parking.
+        Dot on a P = predicted availability: green likely · amber moderate · red busy. Green map areas are parks, not parking.
       </p>
     </div>
   );
