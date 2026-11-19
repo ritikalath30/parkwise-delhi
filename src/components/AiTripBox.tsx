@@ -11,11 +11,13 @@ type Resp = {
 };
 
 /** Natural-language trip input: AI turns a sentence into the destination + filters. */
-export function AiTripBox({ onResult }: { onResult: (patch: Partial<CleanSearch>, go: boolean) => void }) {
+export function AiTripBox({ onResult, onGo, date, time }: { onResult: (patch: Partial<CleanSearch>, go: boolean) => void; onGo: () => void; date: string; time: string }) {
+  const [askTime, setAskTime] = useState(false);
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string; source?: string; why?: SemanticMatch[] } | null>(null);
   const [stage, setStage] = useState("");
+  const [ready, setReady] = useState(false);
 
   const run = async () => {
     if (text.trim().length < 3) return;
@@ -48,16 +50,20 @@ export function AiTripBox({ onResult }: { onResult: (patch: Partial<CleanSearch>
       if (i.budget) patch.budget = i.budget;
       if (i.walk) patch.walk = i.walk;
       if (i.pref) patch.pref = i.pref;
+      const explicitTime = /\d/.test(text) && i.time;
       const parts = [
         j.destination ? `📍 ${j.destination.label}` : i.place ? `📍 “${i.place}” not found in Delhi` : "📍 no place found — add one",
-        i.time && `🕗 ${i.time}`,
+        i.time ? `🕗 ${i.time}${explicitTime ? "" : " (from “" + (/dinner/i.test(text) ? "dinner" : /lunch/i.test(text) ? "lunch" : "breakfast") + "”)"}` : "🕗 time not mentioned → 7:30 pm",
+
         i.hours && `${i.hours} h`,
         i.pref && (i.pref === "free" ? "free parking" : i.pref === "paid" ? "paid parking" : "free or paid"),
         i.budget && `≤ ₹${i.budget}`,
         i.walk && `walk ≤ ${i.walk} m`,
       ].filter(Boolean);
       setMsg({ ok: !!j.destination, text: parts.join(" · "), source, why });
-      onResult(patch, !!j.destination);
+      onResult(patch, false);
+      setReady(!!j.destination);
+      setAskTime(!explicitTime);
     } catch (e) {
       setMsg({ ok: false, text: e instanceof Error ? e.message : "Couldn't understand that — try the form below." });
     } finally {
@@ -97,6 +103,18 @@ export function AiTripBox({ onResult }: { onResult: (patch: Partial<CleanSearch>
             </span>
           )}
         </p>
+      )}
+      {ready && (
+        <div className={askTime ? "grid grid-cols-2 gap-2 rounded-lg border-2 border-signal bg-signal/10 p-2" : "grid grid-cols-2 gap-2"} data-testid="ai-ask-time">
+          {askTime && <p className="col-span-2 text-xs font-semibold">When are you going? (not mentioned)</p>}
+          <input type="date" aria-label="Date" value={date || new Date().toISOString().slice(0, 10)} onChange={(e) => e.target.value && onResult({ date: e.target.value }, false)} className="h-9 rounded-md border border-input bg-card px-2 text-sm" />
+          <input type="time" aria-label="Arrival time" value={time} onChange={(e) => e.target.value && onResult({ time: e.target.value }, false)} className="h-9 rounded-md border border-input bg-card px-2 text-sm" />
+        </div>
+      )}
+      {ready && (
+        <Button type="button" variant="signal" className="w-full" onClick={onGo} data-testid="ai-go">
+          See restaurants &amp; parking →
+        </Button>
       )}
     </div>
   );

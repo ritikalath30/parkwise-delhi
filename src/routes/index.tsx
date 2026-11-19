@@ -67,10 +67,13 @@ function SearchScreen() {
             }}
           >
             <AiTripBox
+              onGo={() => hasDestination(form) && navigate({ to: "/explore", search: form })}
+              date={form.date}
+              time={form.time}
               onResult={(patch, go) => {
                 const next = cleanSearch({ ...form, ...patch });
                 setForm(next);
-                if (go && hasDestination(next)) setTimeout(() => navigate({ to: "/explore", search: next }), 2500);
+
               }}
             />
             <details className="group" open={hasDestination(form)}>

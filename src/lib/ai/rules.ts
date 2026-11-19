@@ -21,6 +21,7 @@ export function parseTripRules(text: string): TripIntent {
     if (!ap && h >= 1 && h <= 10) h += 12; // "dinner at 8" means 8 pm
     if (h <= 23) out.time = `${String(h).padStart(2, "0")}:${tm[2] ?? "00"}`;
   }
+  if (!out.time) out.time = /\bdinner\b/.test(t) ? "20:00" : /\blunch\b/.test(t) ? "13:00" : /\bbreakfast|brunch\b/.test(t) ? "09:30" : null;
   const hr = /(\d+(?:\.\d+)?)\s*(?:hours?|hrs?|h)\b/.exec(t);
   if (hr) out.hours = Math.round(Number(hr[1]));
   const bud = /(?:₹|rs\.?|inr|budget(?: of)?|under|below|max(?:imum)?)\s*₹?\s*(\d{2,4})/.exec(t) ?? /(\d{2,4})\s*(?:rupees|rs|inr)\b/.exec(t);
