@@ -25,5 +25,5 @@ export function chargeLabel(fee: "yes" | "no" | "unknown", charge: Charge | null
   if (fee === "no") return "Free (₹0)";
   if (charge) return `₹${charge.amount}${charge.per === "visit" ? " per visit" : `/${charge.per}`}`;
   if (raw) return `As mapped: "${raw}"`;
-  return fee === "yes" ? "Paid — price unknown" : "Fee unknown";
+  return fee === "yes" ? "Paid · price unavailable" : "Price unavailable";
 }

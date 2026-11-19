@@ -57,7 +57,7 @@ describe("eligibility before ranking", () => {
   it("unknown prices are never invented", () => {
     const o = evaluate(data, c()).restaurants[0]!.options.find((x) => x.parking.name === "Test Paid No Price")!;
     expect(o.cost).toBeNull();
-    expect(o.costLabel).toBe("Paid — price unknown");
+    expect(o.costLabel).toBe("Paid · price unavailable");
   });
   it("respects parking opening hours for the whole stay", () => {
     // Test Free Lot is open 06:00–22:00: a 21:00 + 2 h stay does not fit
@@ -134,5 +134,15 @@ describe("grid: no recommendation ever breaks a filter", () => {
   it("fix suggestions only offer changes that produce results", () => {
     const cr = c({ pref: "free", walk: 100 });
     for (const f of suggestFixes(data, cr)) expect(evaluate(data, { ...cr, ...f.patch }).top.length).toBeGreaterThan(0);
+  });
+});
+
+import { isReliable } from "@/lib/engine";
+describe("reliability gate", () => {
+  it("rejects lots with no recorded access, fee, name or operator", () => {
+    const base = { accessTag: null, fee: "unknown", name: null, operator: null } as never;
+    expect(isReliable(base)).toBe(false);
+    expect(isReliable({ ...(base as object), fee: "no" } as never)).toBe(true);
+    expect(isReliable({ ...(base as object), accessTag: "public" } as never)).toBe(true);
   });
 });

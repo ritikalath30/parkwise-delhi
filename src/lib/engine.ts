@@ -24,7 +24,24 @@ export type Criteria = {
   pref: Pref;
 };
 
-export type Blocker = "pref" | "hours" | "walk" | "budget";
+export type Blocker = "pref" | "hours" | "walk" | "budget" | "unverified";
+
+const PUBLIC_ACCESS = new Set(["yes", "public", "permissive", "designated"]);
+/** Facts actually recorded for a lot (never assumptions). */
+export function verifiedFacts(p: Parking): string[] {
+  const f: string[] = [];
+  if (p.accessTag && PUBLIC_ACCESS.has(p.accessTag)) f.push("public access recorded");
+  if (p.fee !== "unknown") f.push(p.fee === "no" ? "recorded as free" : "recorded as paid");
+  if (p.name) f.push("named facility");
+  if (p.operator) f.push(`operator: ${p.operator}`);
+  if (p.openingHours) f.push("opening hours recorded");
+  if (p.capacity?.source === "osm-tag") f.push(`capacity ${p.capacity.value} recorded`);
+  return f;
+}
+/** Minimum bar to recommend: at least one recorded access, fee, name or operator fact. */
+export function isReliable(p: Parking) {
+  return (p.accessTag !== null && PUBLIC_ACCESS.has(p.accessTag)) || p.fee !== "unknown" || !!p.name || !!p.operator;
+}
 export type OptionTag = "best-match" | "cheapest" | "closest-available" | "shortest-walk";
 
 export const TAG_LABEL: Record<OptionTag, string> = {
@@ -119,6 +136,10 @@ export function evaluate(data: EngineInput, c: Criteria): Evaluation {
       const walkM = routeM !== undefined ? Math.max(straightM, Math.round(routeM / 10) * 10) : estimatedWalkM(r, p);
       const issues: string[] = [];
       const blockers: Blocker[] = [];
+      if (!isReliable(p)) {
+        blockers.push("unverified");
+        issues.push("Too little recorded data (no access, fee, name or operator)");
+      }
       if (!prefAllows(p, c.pref)) {
         blockers.push("pref");
         issues.push(c.pref === "free" ? (p.category === "paid" ? "Paid parking" : "Not confirmed as free") : "Free parking (you chose paid)");
@@ -198,6 +219,7 @@ export function describe(o: Option) {
 
 function nearestIssue(options: Option[], c: Criteria) {
   if (!options.length) return "No public parking found nearby";
+  if (options.every((o) => o.blockers.includes("unverified"))) return "Not enough reliable parking data here: nearby lots have no recorded access, fee, name or operator";
   if (c.pref === "free" && options.every((o) => o.blockers.includes("pref"))) return "No confirmed free parking nearby";
   const closest = [...options].sort((a, b) => a.walkM - b.walkM)[0]!;
   return `No parking fits — nearest is ${closest.walkM} m away: ${closest.issues[0] ?? "—"}`;

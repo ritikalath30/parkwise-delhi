@@ -41,8 +41,8 @@ describe("charges", () => {
     expect(chargeFor("yes", { amount: 20, currency: "INR", per: "hour" }, 2.5)).toBe(60);
     expect(chargeFor("yes", null, 2)).toBeNull();
     expect(chargeFor("unknown", null, 2)).toBeNull();
-    expect(chargeLabel("yes", null, null)).toBe("Paid — price unknown");
-    expect(chargeLabel("unknown", null, null)).toBe("Fee unknown");
+    expect(chargeLabel("yes", null, null)).toBe("Paid · price unavailable");
+    expect(chargeLabel("unknown", null, null)).toBe("Price unavailable");
   });
 });
 

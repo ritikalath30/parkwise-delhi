@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { verifiedFacts } from "@/lib/engine";
 import { createFileRoute, Link, redirect, useNavigate } from "@tanstack/react-router";
 import { fallback, zodValidator } from "@tanstack/zod-adapter";
 import { z } from "zod";
@@ -141,21 +142,21 @@ function PlanScreen() {
                   {parkingName(option.parking)} <CategoryBadge category={option.parking.category} />
                 </h3>
                 <div className="mt-1"><OptionTags tags={option.tags} /></div>
-                <p className="mt-2 rounded-lg bg-muted px-3 py-2 text-xs" data-testid="why">
-                  <strong>Why this one:</strong>{" "}
+                <div className="mt-3 rounded-lg bg-card px-3 py-2 text-xs text-foreground" data-testid="why">
+                  <strong>Why this one (from recorded data only):</strong>{" "}
                   {[
-                    option.cost === 0 ? "free" : option.cost !== null ? `₹${option.cost}, within your ₹${c.budget} budget` : "price not recorded (fee unknown)",
-                    `${walkM} m walk, within your ${c.walk} m limit`,
-                    "publicly accessible on OpenStreetMap",
-                    option.parking.openingHours ? "open for your whole stay" : "opening hours not recorded",
-                  ].join(" · ")}
-                </p>
-                <p className="mt-1 text-[11px] text-muted-foreground">Data: OpenStreetMap snapshot, 14 Nov 2026. Availability is estimated from simulated demand; actual availability is not confirmed.</p>
+                    option.cost === 0 ? "recorded as free" : option.cost !== null ? `₹${option.cost} for ${c.hours} h, within your ₹${c.budget} budget` : "price unavailable",
+                    walkM <= c.walk ? `${walkM} m walk, within your ${c.walk} m limit` : `${walkM} m walk`,
+                    ...verifiedFacts(option.parking).filter((f) => !f.startsWith("recorded as")),
+                    option.openForStay === true ? "open for your whole stay" : option.parking.openingHours ? null : "opening hours not recorded",
+                    option.availability.kind === "predicted" ? "availability is an estimate (simulated, not live)" : "availability unknown",
+                  ].filter(Boolean).join(" · ")}
+                </div>
               </div>
               <div className="p-5">
                 <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                  <Stat icon={IndianRupee} label="Estimated charge" value={option.cost === 0 ? "₹0" : option.cost !== null ? `₹${option.cost}` : "Unknown"} sub={option.cost === null ? option.costLabel : `${c.hours} h · ${option.costLabel}`} />
-                  <Stat icon={Car} label="Availability" value={option.availability.kind === "unknown" ? "Unknown" : option.availability.label} sub={option.availability.kind === "predicted" ? "Predicted · simulated history" : option.availability.source} />
+                  <Stat icon={IndianRupee} label="Estimated charge" value={option.cost === 0 ? "₹0" : option.cost !== null ? `₹${option.cost}` : "Price unavailable"} sub={option.cost === null ? option.costLabel : `${c.hours} h · ${option.costLabel}`} />
+                  <Stat icon={Car} label="Availability" value={option.availability.kind === "unknown" ? "Unknown" : option.availability.label} sub={option.availability.kind === "predicted" ? "Estimate from simulated demand · not live" : option.availability.source} />
                   <Stat icon={Footprints} label="Walk" value={`${walkM} m`} sub={routeQ.isLoading ? "Fetching route…" : `~${walkMin} min · ${walkSource}`} />
                   <Stat
                     icon={ParkingSquare}
