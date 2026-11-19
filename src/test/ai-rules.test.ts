@@ -34,3 +34,9 @@ describe("local Delhi place search", () => {
     expect(localGeocode("Haldiram").some((r) => r.kind === "restaurant")).toBe(true);
   });
 });
+describe("typo tolerance", () => {
+  it("finds places despite misspellings", () => {
+    expect(localGeocode("khaan market")[0]?.label).toBe("Khan Market");
+    expect(localGeocode("canught place")[0]?.label).toBe("Connaught Place");
+  });
+});

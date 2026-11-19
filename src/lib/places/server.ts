@@ -232,8 +232,16 @@ export function localGeocode(q: string, limit = 7): GeocodeResult[] {
   const qn = q.trim().toLowerCase().replace(/\s+/g, " ");
   const tokens = qn.split(" ").filter(Boolean);
   if (!tokens.length) return [];
-  const scored = localIndex
-    .filter((p) => tokens.every((t) => p.lower.includes(t)))
+  let pool = localIndex.filter((p) => tokens.every((t) => p.lower.includes(t)));
+  if (!pool.length) {
+    // Typo tolerance ("khaan market", "canught place"): letter-pair similarity on place names (not restaurants)
+    const pairs = (x: string) => { const a = x.replace(/[^a-z]/g, ""); const r: string[] = []; for (let i = 0; i < a.length - 1; i++) r.push(a.slice(i, i + 2)); return r; };
+    const qp = pairs(qn);
+    const sim = (n: string) => { const np = pairs(n); const set = [...np]; let hit = 0; for (const x of qp) { const k = set.indexOf(x); if (k >= 0) { hit++; set.splice(k, 1); } } return (2 * hit) / (qp.length + np.length || 1); };
+    pool = localIndex.filter((p) => p.kind !== "restaurant" && sim(p.lower) >= 0.6).sort((a, b) => sim(b.lower) - sim(a.lower)).slice(0, 5);
+    return pool.map((p) => ({ id: `local:${p.lower}:${p.kind}`, label: p.name, detail: "Delhi", lat: p.lat, lng: p.lng, kind: p.kind }));
+  }
+  const scored = pool
     .map((p) => ({ p, score: (p.lower === qn ? 0 : p.lower.startsWith(qn) ? 10 : 20) + (KIND_RANK[p.kind] ?? 3) + p.lower.length / 100 }))
     .sort((a, b) => a.score - b.score);
   const seen = new Set<string>();

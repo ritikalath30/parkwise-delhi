@@ -73,7 +73,9 @@ function SearchScreen() {
                 if (go && hasDestination(next)) setTimeout(() => navigate({ to: "/explore", search: next }), 2500);
               }}
             />
-            <div className="flex items-center gap-3 text-xs text-muted-foreground"><span className="h-px flex-1 bg-border" />or fill in the details<span className="h-px flex-1 bg-border" /></div>
+            <details className="group" open={hasDestination(form)}>
+              <summary className="cursor-pointer text-xs font-semibold text-muted-foreground">Check or adjust what the AI understood ▾</summary>
+              <div className="mt-3 space-y-4">
             <h2 className="text-lg font-bold">Where are you eating?</h2>
             <DestinationSearch
               value={form.q}
@@ -81,6 +83,8 @@ function SearchScreen() {
               onSelect={(r) => setForm((f) => ({ ...f, q: r.detail ? `${r.label}, ${r.detail.split(", ").slice(0, 2).join(", ")}` : r.label, lat: r.lat, lng: r.lng }))}
             />
             <TripAdjuster search={form} onChange={(patch) => setForm((f) => cleanSearch({ ...f, ...patch }))} />
+              </div>
+            </details>
             <Button type="submit" variant="signal" size="xl" className="w-full" disabled={!ready}>
               {ready ? "Find restaurants & parking" : "Choose a destination to continue"} <ArrowRight />
             </Button>

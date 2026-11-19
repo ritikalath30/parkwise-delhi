@@ -32,7 +32,7 @@ export function parseTripRules(text: string): TripIntent {
   if (/free (?:parking )?only|only free|free parking/.test(t)) out.pref = "free";
   else if (/paid (?:is fine|ok|okay)|don'?t mind paying|paid parking/.test(t)) out.pref = "paid";
 
-  const pl = /\b(?:near|in|at|around)\s+([a-z][a-z .'-]{2,40}?)(?=\s+(?:at|for|by|around|with|under|tonight|today|tomorrow|on)\b|[,.;]|\s*$)/.exec(t);
+  const pl = /\b(?:near|in|at|around|to)\s+([a-z][a-z .'-]{2,40}?)(?=\s+(?:at|for|by|around|with|under|tonight|today|tomorrow|on)\b|[,.;]|\s*$)/.exec(t);
   if (pl && !/^\d/.test(pl[1]!)) out.place = pl[1]!.trim().replace(/\b\w/g, (c) => c.toUpperCase());
   return out;
 }
