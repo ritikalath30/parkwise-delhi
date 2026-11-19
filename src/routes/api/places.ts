@@ -14,7 +14,7 @@ export const Route = createFileRoute("/api/places")({
         const data = await loadPlaceData(lat, lng);
         return Response.json(data, {
           status: data.error ? 503 : 200,
-          headers: { "cache-control": data.error ? "no-store" : "public, s-maxage=86400, stale-while-revalidate=604800, max-age=600" },
+          headers: { "cache-control": data.error ? "no-store" : data.demo ? "public, s-maxage=300, max-age=60" : "public, s-maxage=86400, stale-while-revalidate=604800, max-age=600" },
         });
       },
     },
