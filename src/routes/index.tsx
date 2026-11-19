@@ -76,7 +76,8 @@ function SearchScreen() {
 
               }}
             />
-            <details className="group" open={hasDestination(form)}>
+            {ready && (
+            <details className="group">
               <summary className="cursor-pointer text-xs font-semibold text-muted-foreground">Check or adjust what the AI understood ▾</summary>
               <div className="mt-3 space-y-4">
             <h2 className="text-lg font-bold">Where are you eating?</h2>
@@ -88,9 +89,8 @@ function SearchScreen() {
             <TripAdjuster search={form} onChange={(patch) => setForm((f) => cleanSearch({ ...f, ...patch }))} />
               </div>
             </details>
-            <Button type="submit" variant="signal" size="xl" className="w-full" disabled={!ready}>
-              {ready ? "Find restaurants & parking" : "Choose a destination to continue"} <ArrowRight />
-            </Button>
+            )}
+
           </form>
         </div>
       </section>
