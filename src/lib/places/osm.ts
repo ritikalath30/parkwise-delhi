@@ -183,7 +183,7 @@ export function toRestaurant(e: OsmElement): Restaurant | null {
   };
 }
 
-export const LIMITS = { restaurants: 40, parkings: 40, foodRadiusM: 800, parkingRadiusM: 1800 };
+export const LIMITS = { restaurants: 40, parkings: 40, foodRadiusM: 700, parkingRadiusM: 1500 };
 
 /** Split Overpass output into restaurants / recommendable parking / excluded parking, nearest first. */
 export function normaliseOverpass(elements: OsmElement[], center: { lat: number; lng: number }) {
@@ -191,7 +191,8 @@ export function normaliseOverpass(elements: OsmElement[], center: { lat: number;
   const parkings: Parking[] = [];
   const excluded: ExcludedParking[] = [];
   let activityCount: number | null = null;
-  const seen = new Set<string>();
+  // The same OSM object can appear twice (tags + centre, then outline only): merge by id.
+  const merged = new Map<string, OsmElement>();
   for (const e of elements) {
     if ((e as { type: string }).type === "count") {
       const total = Number(e.tags?.total);
@@ -199,8 +200,10 @@ export function normaliseOverpass(elements: OsmElement[], center: { lat: number;
       continue;
     }
     const id = osmId(e);
-    if (seen.has(id)) continue;
-    seen.add(id);
+    const prev = merged.get(id);
+    merged.set(id, prev ? { ...prev, ...e, tags: { ...prev.tags, ...e.tags } } : e);
+  }
+  for (const e of merged.values()) {
     const r = toRestaurant(e);
     if (r) {
       restaurants.push(r);

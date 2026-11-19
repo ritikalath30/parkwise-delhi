@@ -37,24 +37,30 @@ export const __clearCaches = () => {
 };
 
 export function overpassQuery(lat: number, lng: number) {
-  return `[out:json][timeout:25];
-nwr["amenity"~"^(restaurant|cafe|fast_food|food_court)$"](around:${LIMITS.foodRadiusM},${lat},${lng})->.food;
-nwr["amenity"="parking"](around:${LIMITS.parkingRadiusM},${lat},${lng})->.park;
-nwr["shop"](around:500,${lat},${lng})->.shop;
-.food out tags center;
-.park out tags geom;
-.shop out count;`;
+  // Kept deliberately light for the shared public servers: centres only, and full outlines only
+  // for lots that need an area-based capacity estimate.
+  const at = `${lat},${lng}`;
+  return `[out:json][timeout:15];
+nwr["amenity"~"^(restaurant|cafe|fast_food|food_court)$"]["name"](around:${LIMITS.foodRadiusM},${at})->.food;
+nwr["amenity"="parking"](around:${LIMITS.parkingRadiusM},${at})->.park;
+.food out tags center qt 150;
+.park out tags center qt;
+way.park[!"capacity"]["parking"!~"multi-storey|underground|rooftop"];
+out ids geom qt;
+nwr["shop"](around:500,${at});
+out count;`;
 }
 
 async function fetchOverpass(query: string, f: typeof fetch): Promise<{ elements: OsmElement[]; endpoint: string }> {
   let lastErr: unknown = null;
-  for (const endpoint of OVERPASS) {
+  // Try each public endpoint; the main one gets a second chance after a short pause when busy.
+  for (const endpoint of [OVERPASS[0]!, ...OVERPASS.slice(1), OVERPASS[0]!]) {
     try {
       const res = await f(endpoint, {
         method: "POST",
         headers: { "User-Agent": UA, Accept: "application/json", "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8" },
         body: new URLSearchParams({ data: query }).toString(),
-        signal: AbortSignal.timeout(14000),
+        signal: AbortSignal.timeout(12000),
       });
       if (!res.ok) throw new Error(`HTTP ${res.status} ${(await res.text()).slice(0, 160).replace(/\s+/g, " ")}`);
       const json = (await res.json()) as { elements?: OsmElement[] };
@@ -62,6 +68,7 @@ async function fetchOverpass(query: string, f: typeof fetch): Promise<{ elements
     } catch (e) {
       lastErr = e;
       console.error("Overpass failed", endpoint, e instanceof Error ? e.message : e);
+      await new Promise((r) => setTimeout(r, 1500));
     }
   }
   throw lastErr ?? new Error("Overpass unavailable");
