@@ -116,9 +116,6 @@ function SearchScreen() {
             </div>
           ))}
         </div>
-        <p className="mt-6 text-center text-xs text-muted-foreground">
-          Map data © OpenStreetMap contributors (snapshot {DELHI_STATS.snapshot}). Parking availability is predicted from simulated demand data — not live.
-        </p>
       </section>
       <SiteFooter />
     </div>
