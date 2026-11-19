@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { createFileRoute, Link, redirect, useNavigate } from "@tanstack/react-router";
 import { fallback, zodValidator } from "@tanstack/zod-adapter";
 import { z } from "zod";
@@ -140,6 +141,16 @@ function PlanScreen() {
                   {parkingName(option.parking)} <CategoryBadge category={option.parking.category} />
                 </h3>
                 <div className="mt-1"><OptionTags tags={option.tags} /></div>
+                <p className="mt-2 rounded-lg bg-muted px-3 py-2 text-xs" data-testid="why">
+                  <strong>Why this one:</strong>{" "}
+                  {[
+                    option.cost === 0 ? "free" : option.cost !== null ? `₹${option.cost}, within your ₹${c.budget} budget` : "price not recorded (fee unknown)",
+                    `${walkM} m walk, within your ${c.walk} m limit`,
+                    "publicly accessible on OpenStreetMap",
+                    option.parking.openingHours ? "open for your whole stay" : "opening hours not recorded",
+                  ].join(" · ")}
+                </p>
+                <p className="mt-1 text-[11px] text-muted-foreground">Data: OpenStreetMap snapshot, 14 Nov 2026. Availability is estimated from simulated demand; actual availability is not confirmed.</p>
               </div>
               <div className="p-5">
                 <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
@@ -185,6 +196,7 @@ function PlanScreen() {
                 <a href={walkingUrl(option.parking, chosen.restaurant)} target="_blank" rel="noopener noreferrer" className="mt-3 flex items-center justify-center gap-1.5 text-sm font-semibold text-primary hover:underline">
                   <Footprints className="h-4 w-4" /> Walking directions to {chosen.restaurant.name}
                 </a>
+                <ReportIssue id={option.parking.id} />
               </div>
             </section>
 
@@ -237,5 +249,26 @@ function PlanScreen() {
         <SimulatedNotice className="mt-6" />
       </div>
     </AppShell>
+  );
+}
+
+function ReportIssue({ id }: { id: string }) {
+  const [sent, setSent] = useState<string | null>(null);
+  const opts = ["Closed", "Incorrect price", "Private access", "No space available"];
+  const report = (r: string) => {
+    try { const k = "pw-reports"; const a = JSON.parse(localStorage.getItem(k) || "[]"); a.push({ id, r, at: new Date().toISOString() }); localStorage.setItem(k, JSON.stringify(a)); } catch { /* storage unavailable */ }
+    setSent(r);
+  };
+  return (
+    <div className="mt-3 rounded-xl border border-border p-3 text-xs" data-testid="report">
+      <p className="font-semibold">Something wrong with this car park?</p>
+      {sent ? (
+        <p className="mt-1 text-muted-foreground">Thanks, reported "{sent}". Prototype: saved on this device; in production reports go to a review queue and a lot is hidden after repeated reports.</p>
+      ) : (
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          {opts.map((o) => <button key={o} type="button" onClick={() => report(o)} className="rounded-lg border border-border px-2 py-1 hover:bg-muted">{o}</button>)}
+        </div>
+      )}
+    </div>
   );
 }
