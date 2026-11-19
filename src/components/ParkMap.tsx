@@ -43,6 +43,12 @@ const BASES = {
     attribution: "© OpenStreetMap contributors",
     maxNativeZoom: 19,
   },
+  // Free, keyless fallback used automatically if the OpenStreetMap tile server fails
+  mapFallback: {
+    url: "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png",
+    attribution: "© OpenStreetMap contributors © CARTO",
+    maxNativeZoom: 19,
+  },
   satellite: {
     url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
     attribution: "Imagery © Esri, Maxar, Earthstar Geographics — capture dates vary by area; not live",
@@ -77,7 +83,8 @@ export default function ParkMap({
   handlersRef.current = { onSelectRestaurant, onSelectParking };
   const selRef = useRef({ r: selectedRestaurantId, p: selectedParkingId });
   selRef.current = { r: selectedRestaurantId, p: selectedParkingId };
-  const [base, setBase] = useState<keyof typeof BASES>("map");
+  const [base, setBase] = useState<"map" | "satellite">("map");
+  const [osmFailed, setOsmFailed] = useState(false);
   const [full, setFull] = useState(false);
 
   const fitAll = () => {
@@ -120,10 +127,15 @@ export default function ParkMap({
     const map = mapRef.current;
     if (!map) return;
     baseRef.current?.remove();
-    const b = BASES[base];
-    baseRef.current = L.tileLayer(b.url, { maxZoom: 19, maxNativeZoom: b.maxNativeZoom, attribution: b.attribution }).addTo(map);
+    const b = BASES[base === "map" && osmFailed ? "mapFallback" : base];
+    let errors = 0;
+    baseRef.current = L.tileLayer(b.url, { maxZoom: 19, maxNativeZoom: b.maxNativeZoom, attribution: b.attribution, subdomains: "abcd" }).addTo(map);
+    if (base === "map" && !osmFailed)
+      baseRef.current.on("tileerror", () => {
+        if (++errors >= 3) setOsmFailed(true); // switch once; no repeated retries
+      });
     baseRef.current.bringToBack();
-  }, [base]);
+  }, [base, osmFailed]);
 
   useEffect(() => {
     fitAll();
