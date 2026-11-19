@@ -14,6 +14,8 @@ import { Route as ExploreRouteImport } from './routes/explore'
 import { Route as MapRouteImport } from './routes/map'
 import { Route as PlanRouteImport } from './routes/plan'
 import { Route as RecommendationsRouteImport } from './routes/recommendations'
+import { Route as ApiGeocodeRouteImport } from './routes/api/geocode'
+import { Route as ApiPlacesRouteImport } from './routes/api/places'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -40,6 +42,16 @@ const RecommendationsRoute = RecommendationsRouteImport.update({
   path: '/recommendations',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiGeocodeRoute = ApiGeocodeRouteImport.update({
+  id: '/api/geocode',
+  path: '/api/geocode',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiPlacesRoute = ApiPlacesRouteImport.update({
+  id: '/api/places',
+  path: '/api/places',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -47,6 +59,8 @@ export interface FileRoutesByFullPath {
   '/map': typeof MapRoute
   '/plan': typeof PlanRoute
   '/recommendations': typeof RecommendationsRoute
+  '/api/geocode': typeof ApiGeocodeRoute
+  '/api/places': typeof ApiPlacesRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -54,6 +68,8 @@ export interface FileRoutesByTo {
   '/map': typeof MapRoute
   '/plan': typeof PlanRoute
   '/recommendations': typeof RecommendationsRoute
+  '/api/geocode': typeof ApiGeocodeRoute
+  '/api/places': typeof ApiPlacesRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -62,13 +78,37 @@ export interface FileRoutesById {
   '/map': typeof MapRoute
   '/plan': typeof PlanRoute
   '/recommendations': typeof RecommendationsRoute
+  '/api/geocode': typeof ApiGeocodeRoute
+  '/api/places': typeof ApiPlacesRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/explore' | '/map' | '/plan' | '/recommendations'
+  fullPaths:
+    | '/'
+    | '/explore'
+    | '/map'
+    | '/plan'
+    | '/recommendations'
+    | '/api/geocode'
+    | '/api/places'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/explore' | '/map' | '/plan' | '/recommendations'
-  id: '__root__' | '/' | '/explore' | '/map' | '/plan' | '/recommendations'
+  to:
+    | '/'
+    | '/explore'
+    | '/map'
+    | '/plan'
+    | '/recommendations'
+    | '/api/geocode'
+    | '/api/places'
+  id:
+    | '__root__'
+    | '/'
+    | '/explore'
+    | '/map'
+    | '/plan'
+    | '/recommendations'
+    | '/api/geocode'
+    | '/api/places'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -77,6 +117,8 @@ export interface RootRouteChildren {
   MapRoute: typeof MapRoute
   PlanRoute: typeof PlanRoute
   RecommendationsRoute: typeof RecommendationsRoute
+  ApiGeocodeRoute: typeof ApiGeocodeRoute
+  ApiPlacesRoute: typeof ApiPlacesRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -116,6 +158,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof RecommendationsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/geocode': {
+      id: '/api/geocode'
+      path: '/api/geocode'
+      fullPath: '/api/geocode'
+      preLoaderRoute: typeof ApiGeocodeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/places': {
+      id: '/api/places'
+      path: '/api/places'
+      fullPath: '/api/places'
+      preLoaderRoute: typeof ApiPlacesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -125,6 +181,8 @@ const rootRouteChildren: RootRouteChildren = {
   MapRoute: MapRoute,
   PlanRoute: PlanRoute,
   RecommendationsRoute: RecommendationsRoute,
+  ApiGeocodeRoute: ApiGeocodeRoute,
+  ApiPlacesRoute: ApiPlacesRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
