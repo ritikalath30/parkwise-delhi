@@ -17,7 +17,8 @@ const OVERPASS = [
 const OSRM_TABLE = "https://routing.openstreetmap.de/routed-foot/table/v1/foot/";
 const PHOTON = "https://photon.komoot.io/api/";
 /** minLon,minLat,maxLon,maxLat */
-const SEARCH_BBOX = "76.98,28.43,77.50,28.74"; // area covered by the bundled Delhi snapshot
+const SEARCH_BBOX = "68.1,6.5,97.5,35.7"; // India; place data coverage is reported separately per area
+const NOMINATIM = "https://nominatim.openstreetmap.org/search";
 
 type CacheEntry<T> = { at: number; value: T };
 function memo<T>(ttlMs: number, max = 300) {
@@ -170,7 +171,7 @@ export async function loadPlaceData(lat: number, lng: number, f: typeof fetch = 
       fetchedAt: new Date().toISOString(),
       sources: { places: "OpenStreetMap", routes: null },
       demo: false,
-      error: "This prototype currently covers Delhi. Live map data for other places is unavailable right now.",
+      error: "We found this place, but restaurant and parking data for this area could not be loaded right now. Full coverage today is the Delhi NCR pilot (bundled OpenStreetMap snapshot); other cities depend on a live OpenStreetMap service that is often slow or down.",
     };
 
   const n = normaliseOverpass(elements, center);
@@ -221,7 +222,7 @@ const KIND_RANK: Record<string, number> = { suburb: 0, market: 0, mall: 1, landm
 let localIndex: { name: string; lower: string; kind: string; lat: number; lng: number }[] | null = null;
 
 /** Instant, offline search over Delhi places (OSM snapshot) and the snapshot's restaurants. */
-export function localGeocode(q: string, limit = 7): GeocodeResult[] {
+export function localGeocode(q: string, limit = 7, fuzzy = true): GeocodeResult[] {
   if (!localIndex) {
     localIndex = (gazetteer as [string, string, number, number][]).map(([name, kind, lat, lng]) => ({ name, lower: name.toLowerCase(), kind, lat, lng }));
     for (const e of delhi.elements as OsmElement[]) {
@@ -234,12 +235,13 @@ export function localGeocode(q: string, limit = 7): GeocodeResult[] {
   if (!tokens.length) return [];
   let pool = localIndex.filter((p) => tokens.every((t) => p.lower.includes(t)));
   if (!pool.length) {
+    if (!fuzzy) return [];
     // Typo tolerance ("khaan market", "canught place"): letter-pair similarity on place names (not restaurants)
     const pairs = (x: string) => { const a = x.replace(/[^a-z]/g, ""); const r: string[] = []; for (let i = 0; i < a.length - 1; i++) r.push(a.slice(i, i + 2)); return r; };
     const qp = pairs(qn);
     const sim = (n: string) => { const np = pairs(n); const set = [...np]; let hit = 0; for (const x of qp) { const k = set.indexOf(x); if (k >= 0) { hit++; set.splice(k, 1); } } return (2 * hit) / (qp.length + np.length || 1); };
     pool = localIndex.filter((p) => p.kind !== "restaurant" && sim(p.lower) >= 0.6).sort((a, b) => sim(b.lower) - sim(a.lower)).slice(0, 5);
-    return pool.map((p) => ({ id: `local:${p.lower}:${p.kind}`, label: p.name, detail: "Delhi", lat: p.lat, lng: p.lng, kind: p.kind }));
+    return pool.map((p) => ({ id: `local:${p.lower}:${p.kind}`, label: p.name, detail: "Delhi NCR", lat: p.lat, lng: p.lng, kind: p.kind }));
   }
   const scored = pool
     .map((p) => ({ p, score: (p.lower === qn ? 0 : p.lower.startsWith(qn) ? 10 : 20) + (KIND_RANK[p.kind] ?? 3) + p.lower.length / 100 }))
@@ -250,7 +252,7 @@ export function localGeocode(q: string, limit = 7): GeocodeResult[] {
     const key = `${p.lower}|${p.kind}`;
     if (seen.has(key)) continue;
     seen.add(key);
-    out.push({ id: `local:${p.lower}:${p.kind}`, label: p.name, detail: "Delhi", lat: p.lat, lng: p.lng, kind: p.kind });
+    out.push({ id: `local:${p.lower}:${p.kind}`, label: p.name, detail: "Delhi NCR", lat: p.lat, lng: p.lng, kind: p.kind });
     if (out.length >= limit) break;
   }
   return out;
@@ -259,15 +261,37 @@ export function localGeocode(q: string, limit = 7): GeocodeResult[] {
 export async function geocode(q: string, bias: { lat: number; lng: number } | null, f: typeof fetch = fetch): Promise<GeocodeResult[]> {
   const query = q.trim().slice(0, 120);
   if (query.length < 2) return [];
-  const local = localGeocode(query);
+  // Exact local matches (Delhi NCR index) first; India-wide search next; typo-tolerant local guesses only as a last resort,
+  // so "Indiranagar" never silently becomes a similarly spelled Delhi locality.
+  const local = localGeocode(query, 7, false);
   if (local.length >= 3) return local;
+  let remote: GeocodeResult[] = [];
   try {
-    const remote = await geocodeRemote(query, bias, f);
-    return [...local, ...remote.filter((r) => !local.some((l) => l.label.toLowerCase() === r.label.toLowerCase()))].slice(0, 7);
-  } catch (e) {
-    if (local.length) return local;
-    throw e;
+    remote = await geocodeRemote(query, bias, f);
+  } catch {
+    remote = await geocodeNominatim(query, f).catch(() => []);
   }
+  const merged = [...local, ...remote.filter((r) => !local.some((l) => l.label.toLowerCase() === r.label.toLowerCase()))].slice(0, 7);
+  return merged.length ? merged : localGeocode(query);
+}
+
+async function geocodeNominatim(query: string, f: typeof fetch): Promise<GeocodeResult[]> {
+  const url = new URL(NOMINATIM);
+  url.searchParams.set("q", query);
+  url.searchParams.set("format", "jsonv2");
+  url.searchParams.set("countrycodes", "in");
+  url.searchParams.set("limit", "5");
+  const res = await f(url, { headers: { "User-Agent": UA }, signal: AbortSignal.timeout(4000) });
+  if (!res.ok) throw new Error(`Nominatim HTTP ${res.status}`);
+  const rows = (await res.json()) as { place_id: number; name?: string; display_name: string; lat: string; lon: string; type?: string }[];
+  return rows.map((r) => ({
+    id: `nom${r.place_id}`,
+    label: r.name || r.display_name.split(",")[0]!,
+    detail: r.display_name.split(",").slice(1, 4).join(",").trim(),
+    lat: Number(r.lat),
+    lng: Number(r.lon),
+    kind: (r.type ?? "place").replace(/_/g, " "),
+  }));
 }
 
 async function geocodeRemote(query: string, bias: { lat: number; lng: number } | null, f: typeof fetch): Promise<GeocodeResult[]> {
@@ -278,7 +302,6 @@ async function geocodeRemote(query: string, bias: { lat: number; lng: number } |
   url.searchParams.set("q", query);
   url.searchParams.set("limit", "7");
   url.searchParams.set("lang", "en");
-  // Delhi-first prototype: only suggest places covered by the bundled Delhi data. Widen per city launch.
   url.searchParams.set("bbox", SEARCH_BBOX);
   if (bias) {
     url.searchParams.set("lat", String(bias.lat));
@@ -294,6 +317,7 @@ async function geocodeRemote(query: string, bias: { lat: number; lng: number } |
     const [lng, lat] = ft.geometry.coordinates;
     const name = p.name ?? [p.housenumber, p.street].filter(Boolean).join(" ");
     if (!name) continue;
+    if (p.country && p.country !== "India") continue;
     const detail = [p.street && p.name ? p.street : null, p.district ?? p.locality, p.city ?? p.county, p.state, p.country]
       .filter((x, i, a) => x && a.indexOf(x) === i && x !== name)
       .join(", ");
@@ -303,6 +327,10 @@ async function geocodeRemote(query: string, bias: { lat: number; lng: number } |
     seen.add(dedupe);
     out.push({ id: `${p.osm_type ?? ""}${p.osm_id ?? out.length}`, label, detail, lat, lng, kind: (p.osm_value ?? p.type ?? "place").replace(/_/g, " ") });
   }
+  // Prefer exact name matches over shops or hotels that merely contain the name (stable: keeps Photon order otherwise).
+  const head = query.split(",")[0]!.trim().toLowerCase();
+  const score = (r: GeocodeResult) => (r.label.toLowerCase() === head ? 0 : 1);
+  out.sort((a, b) => score(a) - score(b));
   geoCache.set(key, out);
   return out;
 }

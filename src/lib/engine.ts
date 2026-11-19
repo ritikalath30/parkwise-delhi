@@ -105,8 +105,10 @@ function rankOf(o: Pick<Option, "walkM" | "availability" | "cost" | "openForStay
   const walk = Math.max(0, 1 - o.walkM / 1500);
   const avail = o.availability.level ? AVAIL_SCORE[o.availability.level] : 0.5;
   const cost = o.cost === null ? 0.4 : 1 - Math.min(o.cost, 300) / 300;
-  const info = (o.parking.fee !== "unknown" ? 0.5 : 0) + (o.openForStay !== null ? 0.5 : 0);
-  return 0.45 * walk + 0.3 * avail + 0.15 * cost + 0.1 * info;
+  // Recorded facts outweigh simulated availability, so closeness alone never wins.
+  const info = Math.min(verifiedFacts(o.parking).length, 4) / 4;
+  const hours = o.openForStay === true ? 1 : o.openForStay === null ? 0.3 : 0;
+  return 0.35 * walk + 0.3 * info + 0.15 * cost + 0.1 * hours + 0.1 * avail;
 }
 
 export function formatTime(min: number) {

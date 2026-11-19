@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 
 // GET /api/ai-search?q=dinner near khan market at 8, free parking, short walk
-// → AI-interpreted filters + the destination geocoded within Delhi.
+// → AI-interpreted filters + the destination geocoded across India (coverage reported separately).
 export const Route = createFileRoute("/api/ai-search")({
   server: {
     handlers: {

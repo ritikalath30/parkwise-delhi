@@ -34,6 +34,12 @@ export function parseTripRules(text: string): TripIntent {
   else if (/paid (?:is fine|ok|okay)|don'?t mind paying|paid parking/.test(t)) out.pref = "paid";
 
   const pl = /\b(?:near|in|at|around|to)\s+([a-z][a-z .'-]{2,40}?)(?=\s+(?:at|for|by|around|with|under|tonight|today|tomorrow|on)\b|[,.;]|\s*$)/.exec(t);
-  if (pl && !/^\d/.test(pl[1]!)) out.place = pl[1]!.trim().replace(/\b\w/g, (c) => c.toUpperCase());
+  if (pl && !/^\d/.test(pl[1]!)) {
+    let place = pl[1]!.trim();
+    // keep a trailing city/area after a comma: "Indiranagar, Bengaluru"
+    const city = /^,\s*([a-z][a-z .'-]{2,25}?)(?=\s+(?:at|for|by|around|with|under|tonight|today|tomorrow|on)\b|[,.;]|\s*$)/.exec(t.slice(pl.index + pl[0].length));
+    if (city && !/^(?:happy|with|my|i|we|paid|free|for|and|around|about|dinner|lunch|breakfast)\b/.test(city[1]!)) place += `, ${city[1]!.trim()}`;
+    out.place = place.replace(/\b\w/g, (c) => c.toUpperCase());
+  }
   return out;
 }

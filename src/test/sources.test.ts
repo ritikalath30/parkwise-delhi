@@ -31,7 +31,7 @@ describe("place-data source chain", () => {
   it("returns an explicit error (no invented places) outside Delhi when live sources fail", async () => {
     const d = await loadPlaceData(19.0583, 72.8302, down); // Mumbai
     expect(d.restaurants).toHaveLength(0);
-    expect(d.error).toMatch(/covers Delhi/);
+    expect(d.error).toMatch(/Delhi NCR pilot/);
   });
 
   it("uses live OpenStreetMap data when Overpass answers", async () => {

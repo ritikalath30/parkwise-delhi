@@ -329,8 +329,8 @@ function MapLegend({ layers, setLayers, excludedCount }: { layers: Layers; setLa
     { key: "dine", label: "Restaurants", swatch: "bg-dine rounded-full" },
     { key: "free", label: "Free", swatch: "bg-ok rounded-sm" },
     { key: "paid", label: "Paid", swatch: "bg-ink rounded-sm" },
-    { key: "unknown", label: "Fee unknown", swatch: "border-2 border-dashed border-ink bg-card rounded-sm" },
-    { key: "excluded", label: `Not public (${excludedCount})`, swatch: "bg-muted-foreground/40 rounded-sm" },
+    { key: "unknown", label: "Price unavailable", swatch: "border-2 border-dashed border-ink bg-card rounded-sm" },
+    { key: "excluded", label: `Private / restricted (${excludedCount})`, swatch: "bg-muted-foreground/40 rounded-sm" },
   ];
   return (
     <div className="rounded-xl border border-border bg-card/95 px-2 py-1.5 text-[11px] shadow-md backdrop-blur" data-testid="legend">
@@ -348,7 +348,7 @@ function MapLegend({ layers, setLayers, excludedCount }: { layers: Layers; setLa
         ))}
       </div>
       <p className="mt-1 text-muted-foreground">
-        Dot on a P = predicted availability: green likely · amber moderate · red busy. Green map areas are parks, not parking.
+        P = mapped car park. Its dot is estimated availability from simulated demand, not live (green likely · amber moderate · red busy). Numbered circles group nearby car parks; the number is car parks, not free spaces. Green areas are parks.
       </p>
     </div>
   );

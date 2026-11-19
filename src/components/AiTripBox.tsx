@@ -52,7 +52,7 @@ export function AiTripBox({ onResult, onGo, date, time }: { onResult: (patch: Pa
       if (i.pref) patch.pref = i.pref;
       const explicitTime = /\d/.test(text) && i.time;
       const parts = [
-        j.destination ? `📍 ${j.destination.label}` : i.place ? `📍 “${i.place}” not found in Delhi` : "📍 no place found — add one",
+        j.destination ? `📍 ${j.destination.label}` : i.place ? `📍 couldn’t find “${i.place}”. Add the area or city (e.g. “Bandra, Mumbai”)` : "📍 Where are you going? Add a place, e.g. “dinner at Cyber Hub, Gurugram”",
         i.time ? `🕗 ${i.time}${explicitTime ? "" : " (from “" + (/dinner/i.test(text) ? "dinner" : /lunch/i.test(text) ? "lunch" : "breakfast") + "”)"}` : "🕗 time not mentioned → 7:30 pm",
 
         i.hours && `${i.hours} h`,
