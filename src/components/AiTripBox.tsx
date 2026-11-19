@@ -43,15 +43,35 @@ export function AiTripBox({ onResult, onGo, date, time }: { onResult: (patch: Pa
       setText(before ? `${before} ${said}` : said);
     };
     rec.onerror = (e) => {
-      setVoiceMsg(
-        e.error === "not-allowed" || e.error === "service-not-allowed"
-          ? "Microphone permission was denied. Allow it in your browser settings, or type your plan."
-          : e.error === "no-speech"
-            ? "Didn't hear anything. Tap the mic to try again."
-            : "Couldn't transcribe that. Tap the mic to retry, or type your plan.",
-      );
+      // Some browsers don't support Indian English recognition: retry once in US English.
+      if (e.error === "language-not-supported" && rec.lang !== "en-US") {
+        rec.lang = "en-US";
+        retry = true;
+        return;
+      }
+      const why: Record<string, string> = {
+        "not-allowed": "Microphone permission was denied. Allow it via the lock icon in the address bar, then tap the mic again.",
+        "service-not-allowed": "This browser blocks its speech service here. Open the site directly in Chrome or Edge, or type your plan.",
+        "no-speech": "Didn't hear anything. Tap the mic and start speaking straight away.",
+        "audio-capture": "No microphone found. Check that one is connected and not used by another app.",
+        network: "Your browser's speech service couldn't be reached. Brave and some privacy settings block it; use Chrome or Edge, or type your plan.",
+        aborted: "Listening was interrupted. Tap the mic to try again.",
+      };
+      setVoiceMsg(`${why[e.error] ?? "Couldn't transcribe that. Tap the mic to retry, or type your plan."} (${e.error})`);
     };
-    rec.onend = () => setListening(false);
+    let retry = false;
+    rec.onend = () => {
+      if (retry) {
+        retry = false;
+        try {
+          rec.start();
+          return;
+        } catch {
+          /* fall through */
+        }
+      }
+      setListening(false);
+    };
     recRef.current = rec;
     setVoiceMsg("");
     setListening(true);
