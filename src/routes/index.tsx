@@ -41,7 +41,7 @@ function SearchScreen() {
       <main className="flex-1">
         <div className="mx-auto max-w-2xl px-4 pb-16 pt-10 sm:pt-16">
           <h1 className="text-3xl font-extrabold leading-tight sm:text-4xl">Where are you eating?</h1>
-          <p className="mt-2 text-muted-foreground">We'll find restaurants there and public parking you can actually use — within your budget and walking distance.</p>
+          <p className="mt-2 text-muted-foreground">We'll find restaurants there and public parking you can actually use — within your budget and walking distance. Delhi first.</p>
 
           <form
             className="mt-6 space-y-5 rounded-2xl border border-border bg-card p-4 shadow-[var(--shadow-card)] sm:p-6"

@@ -90,7 +90,10 @@ function PlanScreen() {
     <AppShell search={search}>
       <div className="mx-auto max-w-6xl px-4 py-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <h1 className="text-2xl font-extrabold sm:text-3xl">Your plan</h1>
+          <h1 className="flex items-center gap-2 text-2xl font-extrabold sm:text-3xl">
+            Your plan
+            {data?.demo && <span className="rounded bg-signal px-2 py-0.5 text-xs font-bold text-signal-foreground" data-testid="demo-badge">DEMO DATA</span>}
+          </h1>
           <Button asChild variant="ghost" size="sm">
             <Link to="/explore" search={search}><ArrowLeft /> Back to Explore</Link>
           </Button>
@@ -151,11 +154,18 @@ function PlanScreen() {
                   />
                 </div>
                 <div className="mt-3 space-y-1 text-xs">
-                  <AvailabilityTag a={option.availability} />
+                  <AvailabilityTag a={option.availability} demo={!!data?.demo} />
                   <FacilityFacts p={option.parking} />
                   <p className="text-muted-foreground">
-                    Hours: {option.parking.openingHours ?? "unknown"} · Operator: {option.parking.operator ?? "unknown"} ·{" "}
-                    <a href={option.parking.url} target="_blank" rel="noopener noreferrer" className="underline">source record</a>
+                    Hours: {option.parking.openingHours ?? "unknown"} · Operator: {option.parking.operator ?? "unknown"}
+                    {option.parking.url ? (
+                      <>
+                        {" · "}
+                        <a href={option.parking.url} target="_blank" rel="noopener noreferrer" className="underline">source record</a>
+                      </>
+                    ) : (
+                      " · DEMO DATA (fictional)"
+                    )}
                   </p>
                 </div>
 
@@ -209,7 +219,7 @@ function PlanScreen() {
                               <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
                                 <span>{o.cost === 0 ? "Free" : o.cost !== null ? `₹${o.cost}` : "Price unknown"}</span>
                                 <span>{o.walkM} m{o.walkSource === "estimate" ? " (est.)" : ""}</span>
-                                <AvailabilityTag a={o.availability} />
+                                <AvailabilityTag a={o.availability} demo={!!data?.demo} />
                               </div>
                             </div>
                             <span className={cn("grid h-5 w-5 shrink-0 place-items-center rounded-full border-2", active ? "border-primary bg-primary text-primary-foreground" : "border-border")}>{active && <Check className="h-3 w-3" />}</span>

@@ -60,6 +60,8 @@ export type PlaceData = {
   routes: Record<string, number> | null;
   fetchedAt: string;
   sources: { places: string; routes: string | null };
+  /** True when live sources failed and fictional Delhi DEMO DATA is shown instead. */
+  demo: boolean;
   error: string | null;
 };
 

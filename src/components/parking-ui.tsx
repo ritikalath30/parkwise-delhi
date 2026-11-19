@@ -29,7 +29,7 @@ const LEVEL_CLASS = {
 } as const;
 
 /** Availability with its evidence type always visible: LIVE / IMAGE ESTIMATE / PREDICTED / UNKNOWN. */
-export function AvailabilityTag({ a, className }: { a: Availability; className?: string | undefined }) {
+export function AvailabilityTag({ a, demo = false, className }: { a: Availability; demo?: boolean; className?: string | undefined }) {
   return (
     <span
       title={`${a.source}${a.simulated ? " — demonstration data, not measured" : ""}`}
@@ -39,6 +39,7 @@ export function AvailabilityTag({ a, className }: { a: Availability; className?:
         className,
       )}
     >
+      {demo && <span className="rounded bg-signal px-1 text-[9px] font-bold tracking-wider text-signal-foreground">DEMO DATA</span>}
       <span className="text-[9px] font-bold tracking-wider opacity-70">{KIND_LABEL[a.kind]}</span>
       {a.kind !== "unknown" && a.label}
       {a.simulated && <span className="font-normal opacity-70">· simulated</span>}

@@ -1,6 +1,8 @@
 // Server-only data access: OpenStreetMap via Overpass, Photon geocoding, OSRM walking matrix.
 // All three are free public services with fair-use policies, so results are cached per instance
 // and responses carry CDN cache headers in the API routes.
+import { haversineM } from "../geo";
+import demoData from "./demo-delhi.json";
 import { normaliseOverpass, LIMITS, type OsmElement } from "./osm";
 import type { GeocodeResult, PlaceData } from "./types";
 
@@ -22,9 +24,9 @@ function memo<T>(ttlMs: number, max = 300) {
       const e = m.get(k);
       return e && Date.now() - e.at < ttlMs ? e.value : undefined;
     },
-    set(k: string, v: T) {
+    set(k: string, v: T, customTtl?: number) {
       if (m.size >= max) m.delete(m.keys().next().value!);
-      m.set(k, { at: Date.now(), value: v });
+      m.set(k, { at: Date.now() - (customTtl ? ttlMs - customTtl : 0), value: v });
     },
     clear: () => m.clear(),
   };
@@ -67,16 +69,9 @@ async function fetchOverpass(query: string, f: typeof fetch): Promise<{ elements
     return { elements: json.elements, endpoint };
   };
   try {
-    return await Promise.any([attempt(OVERPASS[0]!, 25000), attempt(OVERPASS[3]!, 25000)]);
+    return await Promise.any([attempt(OVERPASS[0]!, 9000), attempt(OVERPASS[3]!, 9000)]);
   } catch (e) {
     for (const err of (e as AggregateError).errors ?? [e]) console.error("Overpass failed", err instanceof Error ? err.message : err);
-  }
-  for (const endpoint of [OVERPASS[1]!, OVERPASS[2]!]) {
-    try {
-      return await attempt(endpoint, 15000);
-    } catch (err) {
-      console.error("Overpass failed", err instanceof Error ? err.message : err);
-    }
   }
   throw new Error("Overpass unavailable");
 }
@@ -118,49 +113,99 @@ function testFixturePath() {
   return p && process.env["NODE_ENV"] !== "production" && !process.env["VERCEL"] ? p : null;
 }
 
+/** Remember a failed live source briefly so every search doesn't wait for the same timeout. */
+let liveDownUntil = 0;
+
 export async function loadPlaceData(lat: number, lng: number, f: typeof fetch = fetch): Promise<PlaceData> {
   // ~100 m grid so nearby searches share a cache entry
   const key = `${lat.toFixed(3)},${lng.toFixed(3)}`;
   const hit = placeCache.get(key);
   if (hit) return hit;
   const center = { lat, lng };
-  const empty = (error: string): PlaceData => ({
-    center,
-    restaurants: [],
-    parkings: [],
-    excluded: [],
-    activityCount: null,
-    routes: null,
-    fetchedAt: new Date().toISOString(),
-    sources: { places: "OpenStreetMap (Overpass API)", routes: null },
-    error,
-  });
-  let elements: OsmElement[];
-  let endpoint: string;
-  try {
-    const fixture = testFixturePath();
-    if (fixture) {
-      // Automated tests only (never in production): synthetic OSM-format elements from a local file.
-      const { readFile } = await import("node:fs/promises");
-      elements = (JSON.parse(await readFile(fixture, "utf8")) as { elements: OsmElement[] }).elements;
-      endpoint = "https://test-fixture.invalid";
-    } else ({ elements, endpoint } = await fetchOverpass(overpassQuery(lat, lng), f));
-  } catch {
-    return empty("Map data service (OpenStreetMap Overpass) is not responding. Please try again in a minute.");
+  const env = typeof process !== "undefined" ? process.env : {};
+
+  // Source chain: test fixture (dev only) → Geoapify (if keyed) → Overpass → Delhi DEMO DATA.
+  let elements: OsmElement[] | null = null;
+  let source = "";
+  let demo = false;
+  const fixture = testFixturePath();
+  if (fixture) {
+    const { readFile } = await import("node:fs/promises");
+    elements = (JSON.parse(await readFile(fixture, "utf8")) as { elements: OsmElement[] }).elements;
+    source = "TEST FIXTURE (synthetic, automated tests only)";
   }
+  const geoKey = env["GEOAPIFY_API_KEY"];
+  if (!elements && geoKey) {
+    try {
+      elements = await (await import("./geoapify")).fetchGeoapify(lat, lng, geoKey, f);
+      source = "OpenStreetMap via Geoapify";
+    } catch (e) {
+      console.error("Geoapify failed", e instanceof Error ? e.message : e);
+    }
+  }
+  if (!elements && Date.now() > liveDownUntil) {
+    try {
+      const r = await fetchOverpass(overpassQuery(lat, lng), f);
+      elements = r.elements;
+      source = `OpenStreetMap via ${new URL(r.endpoint).host}`;
+    } catch {
+      liveDownUntil = Date.now() + 2 * 60 * 1000;
+    }
+  }
+  if (!elements) {
+    const d = demoNear(lat, lng);
+    if (!d)
+      return {
+        center,
+        restaurants: [],
+        parkings: [],
+        excluded: [],
+        activityCount: null,
+        routes: null,
+        fetchedAt: new Date().toISOString(),
+        sources: { places: "OpenStreetMap", routes: null },
+        demo: false,
+        error: "Live map data is unavailable right now, and there is no demo data for this location. Demo data covers Hauz Khas Village, Khan Market, Connaught Place and Saket.",
+      };
+    elements = d.elements;
+    source = `DEMO DATA — fictional places near ${d.area} (live map data unavailable)`;
+    demo = true;
+  }
+
   const n = normaliseOverpass(elements, center);
+  if (demo) for (const p of [...n.parkings, ...n.excluded]) p.url = "";
   const routes = await fetchWalkMatrix(n.parkings, n.restaurants, f);
   const data: PlaceData = {
     center,
     ...n,
     routes,
     fetchedAt: new Date().toISOString(),
-    sources: { places: endpoint.includes("test-fixture") ? "TEST FIXTURE (synthetic, automated tests only)" : `OpenStreetMap via ${new URL(endpoint).host}`, routes: routes ? "OpenStreetMap walking routes (FOSSGIS OSRM)" : null },
+    sources: { places: source, routes: routes ? "OpenStreetMap walking routes (FOSSGIS OSRM)" : null },
+    demo,
     error: null,
   };
-  placeCache.set(key, data);
+  placeCache.set(key, data, demo ? 5 * 60 * 1000 : undefined);
   return data;
 }
+
+function demoNear(lat: number, lng: number) {
+  const near = demoData.areas
+    .map((a) => ({ a, d: haversineM({ lat, lng }, a) }))
+    .sort((x, y) => x.d - y.d)[0];
+  if (!near || near.d > 3000) return null;
+  // Same search radii as the live query
+  const elements = (demoData.elements as OsmElement[]).filter((e) => {
+    const pos = e.lat !== undefined ? { lat: e.lat, lng: e.lon! } : e.center ? { lat: e.center.lat, lng: e.center.lon } : null;
+    if (!pos) return false;
+    const d = haversineM({ lat, lng }, pos);
+    return e.tags?.amenity === "parking" ? d <= LIMITS.parkingRadiusM : d <= LIMITS.foodRadiusM;
+  });
+  return { area: near.a.name, elements };
+}
+
+export const __resetLiveState = () => {
+  liveDownUntil = 0;
+};
 
 type PhotonProps = Partial<Record<"name" | "housenumber" | "street" | "district" | "locality" | "city" | "county" | "state" | "country" | "osm_type" | "osm_id" | "osm_value" | "type", string>>;
 type PhotonFeature = { geometry: { coordinates: [number, number] }; properties: PhotonProps };

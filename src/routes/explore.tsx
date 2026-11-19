@@ -166,6 +166,12 @@ function ExploreScreen() {
 
             {ev && data && (
               <>
+                {data.demo && (
+                  <div className="rounded-xl border-2 border-signal bg-signal/20 px-3 py-2 text-xs text-signal-foreground" data-testid="demo-banner">
+                    <strong>DEMO DATA.</strong> Live map data is unavailable right now, so these restaurants and car parks are fictional examples near{" "}
+                    {data.sources.places.replace(/^.*near (.*) \(.*$/, "$1")}. Prices, hours and capacity are illustrative. Walking routes are real.
+                  </div>
+                )}
                 <p className="text-xs text-muted-foreground" data-testid="counts">
                   {data.restaurants.length} restaurants · {data.parkings.length} public car parks found nearby · {ev.top.length ? `${ev.restaurants.filter((r) => r.eligible).length} restaurants have parking that fits` : "none fit your filters"}
                 </p>
@@ -206,6 +212,7 @@ function ExploreScreen() {
                     onPickParking={setSelP}
                     routeM={selected?.restaurant.id === r.restaurant.id ? (routeQ.data?.distanceM ?? null) : null}
                     search={search}
+                    demo={data.demo}
                   />
                 ))}
                 {ev.restaurants.length > ev.top.length && (
@@ -232,6 +239,7 @@ function RestaurantCard({
   onPickParking,
   routeM,
   search,
+  demo,
 }: {
   r: RestaurantEval;
   selected: boolean;
@@ -240,6 +248,7 @@ function RestaurantCard({
   onPickParking: (id: string) => void;
   routeM: number | null;
   search: CleanSearch;
+  demo: boolean;
 }) {
   const eligible = r.options.filter((o) => o.eligible);
   return (
@@ -261,7 +270,7 @@ function RestaurantCard({
             <span className="text-muted-foreground">
               {option.cost === 0 ? "Free" : option.cost !== null ? `₹${option.cost}` : "Price unknown"} · {routeM ?? option.walkM} m walk
             </span>
-            <AvailabilityTag a={option.availability} />
+            <AvailabilityTag a={option.availability} demo={demo} />
           </div>
         ) : (
           <p className="mt-2 text-xs text-busy">{r.reason}</p>
@@ -289,7 +298,7 @@ function RestaurantCard({
                   <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-muted-foreground">
                     <span className="font-semibold text-foreground">{o.cost === 0 ? "Free" : o.cost !== null ? `₹${o.cost} for ${search.hours} h` : o.costLabel}</span>
                     <span className="inline-flex items-center gap-0.5"><Footprints className="h-3 w-3" />{o.walkM} m{o.walkSource === "estimate" ? " (est.)" : ""} · {o.walkMin} min</span>
-                    <AvailabilityTag a={o.availability} />
+                    <AvailabilityTag a={o.availability} demo={demo} />
                   </div>
                 </button>
               </li>
