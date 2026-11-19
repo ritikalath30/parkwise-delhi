@@ -4,8 +4,13 @@
 import { normaliseOverpass, LIMITS, type OsmElement } from "./osm";
 import type { GeocodeResult, PlaceData } from "./types";
 
-const UA = "ParkWise-GeoAI/1.0 (prototype; https://parkwise-delhi.vercel.app)";
-const OVERPASS = ["https://overpass-api.de/api/interpreter", "https://overpass.private.coffee/api/interpreter"];
+const UA = "ParkWise-GeoAI/1.0 (+https://github.com/ritikalath30/parkwise-delhi)";
+const OVERPASS = [
+  "https://overpass-api.de/api/interpreter",
+  "https://overpass.kumi.systems/api/interpreter",
+  "https://maps.mail.ru/osm/tools/overpass/api/interpreter",
+  "https://overpass.private.coffee/api/interpreter",
+];
 const OSRM_TABLE = "https://routing.openstreetmap.de/routed-foot/table/v1/foot/";
 const PHOTON = "https://photon.komoot.io/api/";
 
@@ -47,11 +52,11 @@ async function fetchOverpass(query: string, f: typeof fetch): Promise<{ elements
     try {
       const res = await f(endpoint, {
         method: "POST",
-        headers: { "User-Agent": UA, "Content-Type": "application/x-www-form-urlencoded" },
-        body: `data=${encodeURIComponent(query)}`,
-        signal: AbortSignal.timeout(20000),
+        headers: { "User-Agent": UA, Accept: "application/json", "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8" },
+        body: new URLSearchParams({ data: query }).toString(),
+        signal: AbortSignal.timeout(14000),
       });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      if (!res.ok) throw new Error(`HTTP ${res.status} ${(await res.text()).slice(0, 160).replace(/\s+/g, " ")}`);
       const json = (await res.json()) as { elements?: OsmElement[] };
       return { elements: json.elements ?? [], endpoint };
     } catch (e) {
@@ -132,7 +137,8 @@ export async function loadPlaceData(lat: number, lng: number, f: typeof fetch = 
   return data;
 }
 
-type PhotonFeature = { geometry: { coordinates: [number, number] }; properties: Record<string, string | undefined> };
+type PhotonProps = Partial<Record<"name" | "housenumber" | "street" | "district" | "locality" | "city" | "county" | "state" | "country" | "osm_type" | "osm_id" | "osm_value" | "type", string>>;
+type PhotonFeature = { geometry: { coordinates: [number, number] }; properties: PhotonProps };
 
 export async function geocode(q: string, bias: { lat: number; lng: number } | null, f: typeof fetch = fetch): Promise<GeocodeResult[]> {
   const query = q.trim().slice(0, 120);

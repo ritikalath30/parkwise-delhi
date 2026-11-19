@@ -5,6 +5,31 @@ import { parseCharge } from "./charge";
 import { parseOpeningHours } from "./hours";
 import type { ExcludedParking, Parking, ParkingKind, Restaurant } from "./types";
 
+export type OsmTags = {
+  amenity?: string;
+  name?: string;
+  "name:en"?: string;
+  access?: string;
+  fee?: string;
+  charge?: string;
+  capacity?: string;
+  opening_hours?: string;
+  parking?: string;
+  lit?: string;
+  supervised?: string;
+  surveillance?: string;
+  "surveillance:type"?: string;
+  covered?: string;
+  operator?: string;
+  cuisine?: string;
+  "addr:housenumber"?: string;
+  "addr:street"?: string;
+  "addr:full"?: string;
+  website?: string;
+  "contact:website"?: string;
+  total?: string;
+};
+
 export type OsmElement = {
   type: "node" | "way" | "relation";
   id: number;
@@ -13,7 +38,7 @@ export type OsmElement = {
   center?: { lat: number; lon: number };
   bounds?: { minlat: number; minlon: number; maxlat: number; maxlon: number };
   geometry?: { lat: number; lon: number }[];
-  tags?: Record<string, string>;
+  tags?: OsmTags;
 };
 
 const osmId = (e: OsmElement) => `${e.type[0]}${e.id}`;
@@ -63,7 +88,7 @@ const NOT_PUBLIC: Record<string, string> = {
   disabled: "Disabled permit holders only",
 };
 
-function kindOf(t: Record<string, string>): ParkingKind {
+function kindOf(t: OsmTags): ParkingKind {
   switch (t.parking) {
     case "surface":
       return "surface";
@@ -169,7 +194,7 @@ export function normaliseOverpass(elements: OsmElement[], center: { lat: number;
   const seen = new Set<string>();
   for (const e of elements) {
     if ((e as { type: string }).type === "count") {
-      const total = Number((e.tags as Record<string, string> | undefined)?.total);
+      const total = Number(e.tags?.total);
       if (Number.isFinite(total)) activityCount = (activityCount ?? 0) + total;
       continue;
     }
