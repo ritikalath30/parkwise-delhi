@@ -59,13 +59,21 @@ export function weekdayIndex(dateISO: string): number {
   return (d.getUTCDay() + 6) % 7;
 }
 
-/** Is the whole span [startMin, startMin + durationMin) inside one opening range? */
+/** Is the whole span [startMin, startMin + durationMin) open, allowing ranges that join across midnight? */
 export function coversSpan(h: WeeklyHours, day: number, startMin: number, durationMin: number): boolean {
+  // Lay the previous, current and next two days on one timeline (minutes from the start of `day`),
+  // then sweep: coverage must be continuous from start to end.
+  const ranges: [number, number][] = [];
+  for (let k = -1; k <= 2; k++) for (const [s, e] of h[(day + k + 7) % 7]!) ranges.push([s + k * 1440, e + k * 1440]);
+  ranges.sort((a, b) => a[0] - b[0]);
   const end = startMin + durationMin;
-  if (h[day]!.some(([s, e]) => s <= startMin && end <= e)) return true;
-  // A range from the previous day that runs past midnight
-  const prev = (day + 6) % 7;
-  return h[prev]!.some(([s, e]) => e > 1440 && s - 1440 <= startMin && end <= e - 1440);
+  let t = startMin;
+  for (const [s, e] of ranges) {
+    if (s > t) break; // gap before this range
+    if (e > t) t = e;
+    if (t >= end) return true;
+  }
+  return false;
 }
 
 export function isOpenAt(h: WeeklyHours, day: number, min: number): boolean {

@@ -1,17 +1,13 @@
-# ParkWise GeoAI roadmap
-- [x] Review fixes: map clicks, AI summary, rank reasons, parking switching, consistency
-- [x] Publish app publicly (Vercel, auto-deploys from `main`)
-- [x] Free/paid/shared parking classification + preference filter (search, map, picks, plan)
-- [x] Restricted / unverified layers on map, never recommended
-- [x] Walking route distance (OSM) vs straight-line, clearly labelled — plan and map detail card
-- [x] Duration-aware simulated demand
-- [x] GeoAI scoring with preference + authorisation factor; free vs paid trade-off explanations (AI + fallback)
-- [x] Availability floor: nearly full facilities (< 3 spots or < 5% of capacity) are never recommended
-- [x] Verified one-tap fixes in empty states (each suggestion re-runs the engine)
-- [x] AI explanations rejected per passage if they cite figures not in the ranking data
-- [x] Tests + full journey browser check
-- [x] Three-stage journey: Search → Explore (map + picks) → Plan
-- [x] Parking Safety Score (synthetic indicators) as a ranking factor; compare parking by safety
-- [x] Filter-then-rank with budget/walk as pure filters; OSM walking-route matrix used for eligibility
-- [ ] Spread top picks across different car parks (avoid three picks sharing one nearly full lot)
-- [ ] Restaurant fit (rating, price, cuisine) as a ranking factor, not only a tie-breaker
+# ParkWise roadmap
+- [x] Search any destination (Photon geocoding, OpenStreetMap)
+- [x] Real restaurants and public parking from OpenStreetMap; FREE / PAID / FEE UNKNOWN; private parking excluded
+- [x] Real walking distances (OSRM table) and routes; estimates labelled
+- [x] Availability provider chain: LIVE / IMAGE ESTIMATE / PREDICTED (simulated) / UNKNOWN
+- [x] Capacity from OSM tag or estimated from mapped surface-lot area
+- [x] Map: clustering, satellite view with source/date note, full screen, legend, layers
+- [x] Removed safety scores, AI-generated explanations and numeric score breakdowns
+- [ ] Reliable place data: public Overpass servers are frequently at capacity — move to a self-hosted Overpass or a keyed OSM places API
+- [ ] LIVE availability: operator / sensor partnerships
+- [ ] IMAGE ESTIMATE: licensed ≤0.5 m imagery + vehicle-detection model (outdoor lots only)
+- [ ] SHARED parking: owner-permission partner source
+- [ ] Ratings: optional Google Places / Foursquare integration (API key required)

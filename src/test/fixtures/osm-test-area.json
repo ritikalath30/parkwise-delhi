@@ -1,0 +1,241 @@
+{
+ "_note": "TEST FIXTURE \u2014 synthetic OpenStreetMap-format elements for automated tests only. Not real places.",
+ "elements": [
+  {
+   "type": "node",
+   "id": 1001,
+   "lat": 28.5549792,
+   "lon": 77.1937905,
+   "tags": {
+    "amenity": "restaurant",
+    "name": "Test Bistro North",
+    "cuisine": "italian",
+    "opening_hours": "12:00-23:30"
+   }
+  },
+  {
+   "type": "node",
+   "id": 1002,
+   "lat": 28.5533604,
+   "lon": 77.1950191,
+   "tags": {
+    "amenity": "restaurant",
+    "name": "Test Caf\u00e9 Lake",
+    "cuisine": "coffee_shop",
+    "opening_hours": "Mo-Su 08:00-22:00"
+   }
+  },
+  {
+   "type": "node",
+   "id": 1003,
+   "lat": 28.5542597,
+   "lon": 77.1957358,
+   "tags": {
+    "amenity": "restaurant",
+    "name": "Test Tandoor House",
+    "cuisine": "indian"
+   }
+  },
+  {
+   "type": "node",
+   "id": 1004,
+   "lat": 28.552551,
+   "lon": 77.1929714,
+   "tags": {
+    "amenity": "restaurant",
+    "name": "Test Noodle Bar",
+    "cuisine": "asian",
+    "opening_hours": "Mo-Fr 12:00-15:00,19:00-23:00; Sa,Su 12:00-23:30"
+   }
+  },
+  {
+   "type": "node",
+   "id": 1005,
+   "lat": 28.5556986,
+   "lon": 77.1948143,
+   "tags": {
+    "amenity": "restaurant",
+    "name": "Test Breakfast Club",
+    "cuisine": "breakfast",
+    "opening_hours": "07:00-14:00"
+   }
+  },
+  {
+   "type": "node",
+   "id": 1006,
+   "lat": 28.5536302,
+   "lon": 77.1921523,
+   "tags": {
+    "amenity": "restaurant",
+    "name": "Test Rooftop Grill",
+    "cuisine": "barbecue",
+    "opening_hours": "18:00-01:00"
+   }
+  },
+  {
+   "type": "node",
+   "id": 1007,
+   "lat": 28.5539899,
+   "lon": 77.1943024,
+   "tags": {
+    "amenity": "restaurant"
+   }
+  },
+  {
+   "type": "node",
+   "id": 1008,
+   "lat": 28.5546195,
+   "lon": 77.1952239,
+   "tags": {
+    "amenity": "parking",
+    "name": "Test Free Lot",
+    "fee": "no",
+    "parking": "surface",
+    "opening_hours": "06:00-22:00",
+    "lit": "yes"
+   }
+  },
+  {
+   "type": "node",
+   "id": 1009,
+   "lat": 28.5530007,
+   "lon": 77.1946095,
+   "tags": {
+    "amenity": "parking",
+    "name": "Test Paid Hourly",
+    "fee": "yes",
+    "charge": "20 INR/hour",
+    "parking": "surface",
+    "supervised": "yes",
+    "opening_hours": "24/7"
+   }
+  },
+  {
+   "type": "way",
+   "id": 1010,
+   "center": {
+    "lat": 28.5563731,
+    "lon": 77.192869
+   },
+   "geometry": [
+    {
+     "lat": 28.5561483,
+     "lon": 77.1926642
+    },
+    {
+     "lat": 28.556598,
+     "lon": 77.1926642
+    },
+    {
+     "lat": 28.556598,
+     "lon": 77.1930738
+    },
+    {
+     "lat": 28.5561483,
+     "lon": 77.1930738
+    },
+    {
+     "lat": 28.5561483,
+     "lon": 77.1926642
+    }
+   ],
+   "tags": {
+    "amenity": "parking",
+    "name": "Test Mapped Surface Lot",
+    "fee": "yes",
+    "charge": "\u20b960",
+    "parking": "surface"
+   }
+  },
+  {
+   "type": "node",
+   "id": 1011,
+   "lat": 28.5516517,
+   "lon": 77.1972716,
+   "tags": {
+    "amenity": "parking",
+    "name": "Test Multi-level",
+    "fee": "yes",
+    "charge": "40 INR/hour",
+    "parking": "multi-storey",
+    "capacity": "300",
+    "opening_hours": "Mo-Su 08:00-24:00"
+   }
+  },
+  {
+   "type": "node",
+   "id": 1012,
+   "lat": 28.5541698,
+   "lon": 77.1932785,
+   "tags": {
+    "amenity": "parking",
+    "name": "Test Unknown Fee Lot"
+   }
+  },
+  {
+   "type": "node",
+   "id": 1013,
+   "lat": 28.5537201,
+   "lon": 77.1938928,
+   "tags": {
+    "amenity": "parking",
+    "name": "Test Paid No Price",
+    "fee": "yes"
+   }
+  },
+  {
+   "type": "node",
+   "id": 1014,
+   "lat": 28.5592959,
+   "lon": 77.2003431,
+   "tags": {
+    "amenity": "parking",
+    "name": "Test Far Free Lot",
+    "fee": "no"
+   }
+  },
+  {
+   "type": "node",
+   "id": 1015,
+   "lat": 28.553945,
+   "lon": 77.1948143,
+   "tags": {
+    "amenity": "parking",
+    "name": "Test Private Lot",
+    "access": "private",
+    "fee": "no"
+   }
+  },
+  {
+   "type": "node",
+   "id": 1016,
+   "lat": 28.5535403,
+   "lon": 77.1951215,
+   "tags": {
+    "amenity": "parking",
+    "name": "Test Customers Lot",
+    "access": "customers"
+   }
+  },
+  {
+   "type": "node",
+   "id": 1017,
+   "lat": 28.5540349,
+   "lon": 77.1940464,
+   "tags": {
+    "amenity": "parking",
+    "parking": "street_side"
+   }
+  },
+  {
+   "type": "count",
+   "id": 0,
+   "tags": {
+    "nodes": "60",
+    "ways": "20",
+    "relations": "0",
+    "total": "80"
+   }
+  }
+ ]
+}

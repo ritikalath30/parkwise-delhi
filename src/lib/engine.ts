@@ -1,376 +1,246 @@
-import { getArea, type Area, type AreaId, type Parking, type Restaurant } from "./data";
-import { evaluateSafety, type SafetyEval } from "./safety";
+// ParkWise recommendation engine — pure and deterministic, shared by the Explore and Plan screens.
+// 1. Eligibility filters run first (public access is already guaranteed by the data layer):
+//    preference → opening hours for the whole stay → walking limit → budget (when the price is known).
+// 2. Eligible options are ranked internally; users only see plain-language tags, never scores.
+import { availabilityFor, type Availability, type AvailabilityContext } from "./availability";
+import { estimatedWalkM, haversineM, WALK_M_PER_MIN } from "./geo";
+import { chargeFor, chargeLabel } from "./places/charge";
+import { coversSpan, isOpenAt, weekdayIndex } from "./places/hours";
+import type { Parking, PlaceData, Restaurant } from "./places/types";
 
-/** OSM walking-route distances in metres, keyed `${parkingId}>${restaurantId}`. */
-export type RouteMatrix = Record<string, number>;
-export const routeKey = (parkingId: string, restaurantId: string) => `${parkingId}>${restaurantId}`;
-
-export type ParkingPref = "free" | "both" | "paid";
-
-export type DayType = "weekday" | "weekend";
+export type Pref = "free" | "paid" | "both";
 
 export type Criteria = {
-  area: AreaId;
-  /** Arrival time, minutes after midnight */
+  /** Arrival date, YYYY-MM-DD */
+  dateISO: string;
+  /** Arrival at the parking, minutes after midnight */
   arrival: number;
-  day: DayType;
   /** Planned stay in hours */
   hours: number;
   /** Max parking spend in ₹ for the whole stay */
   budget: number;
-  /** Max walking distance in metres */
+  /** Max walk from parking to restaurant, metres */
   walk: number;
-  /** free = ₹0 parking only; both = compare free & paid; paid = paid is fine, favour convenience */
-  pref: ParkingPref;
+  pref: Pref;
 };
 
-export type ParkingStatus = "good" | "limited" | "scarce" | "closed";
+export type Blocker = "pref" | "hours" | "walk" | "budget";
+export type OptionTag = "best-match" | "cheapest" | "closest-available" | "shortest-walk";
 
-export type ParkingEval = {
-  parking: Parking;
-  occupancy: number;
-  availabilityPct: number;
-  freeSpots: number;
-  cost: number;
-  searchMin: number;
-  status: ParkingStatus;
-  open: boolean;
-  safety: SafetyEval;
+export const TAG_LABEL: Record<OptionTag, string> = {
+  "best-match": "Best match",
+  cheapest: "Cheapest",
+  "closest-available": "Closest with likely spaces",
+  "shortest-walk": "Shortest walk",
 };
 
 export type Option = {
-  park: ParkingEval;
-  /** Walking distance used for filtering and scoring: OSM route when available, else estimate. */
+  parking: Parking;
   walkM: number;
-  /** "route" = OpenStreetMap walking route; "estimate" = straight line × 1.3 street factor. */
   walkSource: "route" | "estimate";
-  /** Great-circle (haversine) distance */
   straightM: number;
   walkMin: number;
-  score: number;
-  breakdown: Record<FactorKey, number>;
-  weights: Weights;
+  /** ₹ for the stay; null = price unknown */
+  cost: number | null;
+  costLabel: string;
+  availability: Availability;
+  /** null = opening hours unknown */
+  openForStay: boolean | null;
   eligible: boolean;
   issues: string[];
-  /** Machine-readable reasons the option is ineligible (parallel to `issues`). */
   blockers: Blocker[];
+  tags: OptionTag[];
+  /** Internal ordering only — never displayed. */
+  rank: number;
 };
-
-export type Blocker = "pref" | "hours" | "stay" | "walk" | "budget" | "full";
 
 export type RestaurantEval = {
   restaurant: Restaurant;
+  distanceM: number;
+  /** null = hours unknown */
+  openAtArrival: boolean | null;
   options: Option[];
   best: Option | null;
   eligible: boolean;
+  reason: string;
 };
 
-export type AreaEval = {
-  area: Area;
-  parkings: ParkingEval[];
+export type Evaluation = {
   restaurants: RestaurantEval[];
-  excludedUnverified: number;
-  /** Unverified / restricted spaces — shown on the map as warnings, never recommended. */
-  excluded: Parking[];
+  top: RestaurantEval[];
+  eligibleCombos: number;
+  totalCombos: number;
 };
 
-export type FactorKey = "availability" | "safety" | "walk" | "cost" | "search" | "authorisation";
-export type Weights = Record<FactorKey, number>;
+export type EngineInput = Pick<PlaceData, "center" | "restaurants" | "parkings" | "routes" | "activityCount">;
 
-/**
- * GeoAI weights (sum = 1), applied only AFTER eligibility filtering. Cost and walking are
- * scored on absolute scales (area price range, 1 km), so the user's budget and walk limit act
- * purely as filters. "Paid is acceptable" shifts weight from cost to convenience and safety.
- */
-export const WEIGHTS: Weights = { availability: 0.27, safety: 0.18, walk: 0.2, cost: 0.15, search: 0.12, authorisation: 0.08 };
-export const PAID_OK_WEIGHTS: Weights = { availability: 0.3, safety: 0.2, walk: 0.23, cost: 0.05, search: 0.14, authorisation: 0.08 };
-/** Walking distance at which the walk factor reaches zero. */
-export const WALK_SCALE_M = 1000;
-export function weightsFor(pref: ParkingPref): Weights {
-  return pref === "paid" ? PAID_OK_WEIGHTS : WEIGHTS;
+export const routeKey = (parkingId: string, restaurantId: string) => `${parkingId}>${restaurantId}`;
+
+function prefAllows(p: Parking, pref: Pref) {
+  if (pref === "free") return p.category === "free";
+  if (pref === "paid") return p.category !== "free";
+  return true;
 }
 
-/** Only authorised facilities, or shared parking with explicit owner permission, are ever recommendable. */
-export function isRecommendable(p: Parking) {
-  return p.authorisation === "authorised" || p.authorisation === "shared-permission";
-}
-/**
- * A facility is only recommendable if enough spots are expected to be free that the user
- * has a realistic chance of getting one: at least 3 spots and 5% of capacity.
- */
-export function minFreeSpots(p: Parking) {
-  return Math.max(3, Math.ceil(p.capacity * 0.05));
+const AVAIL_SCORE = { low: 1, moderate: 0.7, high: 0.35, "very-high": 0.05 } as const;
+
+function rankOf(o: Pick<Option, "walkM" | "availability" | "cost" | "openForStay" | "parking">) {
+  const walk = Math.max(0, 1 - o.walkM / 1500);
+  const avail = o.availability.level ? AVAIL_SCORE[o.availability.level] : 0.5;
+  const cost = o.cost === null ? 0.4 : 1 - Math.min(o.cost, 300) / 300;
+  const info = (o.parking.fee !== "unknown" ? 0.5 : 0) + (o.openForStay !== null ? 0.5 : 0);
+  return 0.45 * walk + 0.3 * avail + 0.15 * cost + 0.1 * info;
 }
 
-const WALK_SPEED_M_PER_MIN = 75;
-const ROUTE_FACTOR = 1.3; // street network vs straight line
-
-export function haversineM(a: { lat: number; lng: number }, b: { lat: number; lng: number }) {
-  const R = 6371000;
-  const toRad = (d: number) => (d * Math.PI) / 180;
-  const dLat = toRad(b.lat - a.lat);
-  const dLng = toRad(b.lng - a.lng);
-  const s =
-    Math.sin(dLat / 2) ** 2 + Math.cos(toRad(a.lat)) * Math.cos(toRad(b.lat)) * Math.sin(dLng / 2) ** 2;
-  return 2 * R * Math.asin(Math.sqrt(s));
+export function formatTime(min: number) {
+  const h = Math.floor(min / 60) % 24;
+  return `${h % 12 === 0 ? 12 : h % 12}:${String(min % 60).padStart(2, "0")} ${h >= 12 ? "pm" : "am"}`;
 }
 
-export function walkingDistanceM(a: { lat: number; lng: number }, b: { lat: number; lng: number }) {
-  return Math.max(40, Math.round((haversineM(a, b) * ROUTE_FACTOR) / 10) * 10);
-}
+export function evaluate(data: EngineInput, c: Criteria): Evaluation {
+  const day = weekdayIndex(c.dateISO);
+  const ctx: AvailabilityContext = { dateISO: c.dateISO, arrivalMin: c.arrival, hours: c.hours, activityCount: data.activityCount };
+  const perParking = data.parkings.map((p) => ({
+    p,
+    availability: availabilityFor(p, ctx),
+    cost: chargeFor(p.fee, p.charge, c.hours),
+    costLabel: chargeLabel(p.fee, p.charge, p.chargeRaw),
+    openForStay: p.hours ? coversSpan(p.hours, day, c.arrival, Math.round(c.hours * 60)) : null,
+  }));
 
-export function parkingCost(p: Parking, hours: number) {
-  const h = Math.max(1, Math.ceil(hours));
-  const raw = p.firstHour + (h - 1) * p.perHourAfter;
-  return p.dailyMax ? Math.min(raw, p.dailyMax) : raw;
-}
-
-function demandAt(area: Area, day: DayType, minutes: number) {
-  const curve = area.demand[day];
-  const m = ((minutes % 1440) + 1440) % 1440;
-  const h = Math.floor(m / 60);
-  const t = (m % 60) / 60;
-  const a = curve[h] ?? 0;
-  const b = curve[(h + 1) % 24] ?? a;
-  return a + (b - a) * t;
-}
-
-/** The whole stay must fall inside opening hours, otherwise the car could be locked in. */
-export function isOpenForStay(p: Parking, minutes: number, hours: number) {
-  const start = minutes / 60;
-  return start >= p.openFrom && start + hours <= p.openTo;
-}
-
-export function formatHour(h: number) {
-  return h >= 24 ? "midnight" : formatTime(Math.round(h * 60));
-}
-
-export function evaluateParking(area: Area, p: Parking, c: Criteria): ParkingEval {
-  const open = isOpenForStay(p, c.arrival, c.hours);
-  // Spatiotemporal estimate from synthetic history: area curve × facility popularity,
-  // blending demand at arrival (75%) with average demand across the stay (25%).
-  const steps = Math.max(1, Math.round(c.hours * 2));
-  let stayAvg = 0;
-  for (let i = 0; i < steps; i++) stayAvg += demandAt(area, c.day, c.arrival + (i * 60 * c.hours) / steps);
-  stayAvg /= steps;
-  const demand = 0.75 * demandAt(area, c.day, c.arrival) + 0.25 * stayAvg;
-  const occupancy = Math.min(0.99, Math.max(0.03, demand * p.demandFactor));
-  // Spots first, then % from spots, so "x free of capacity" and "% free" always agree.
-  const freeSpots = open ? Math.max(0, Math.round(p.capacity * (1 - occupancy))) : 0;
-  const availabilityPct = open ? Math.round((freeSpots / p.capacity) * 100) : 0;
-  // Expected minutes spent queuing / circling inside the facility
-  const searchMin = open ? Math.round(1 + 14 * occupancy ** 4 + (occupancy > 0.9 ? 5 : 0)) : 99;
-  const status: ParkingStatus = !open
-    ? "closed"
-    : availabilityPct >= 35
-      ? "good"
-      : availabilityPct >= 15
-        ? "limited"
-        : "scarce";
-  return { parking: p, occupancy, availabilityPct, freeSpots, cost: parkingCost(p, c.hours), searchMin, status, open, safety: evaluateSafety(p) };
-}
-
-function scoreOption(pe: ParkingEval, walkM: number, c: Criteria, maxCost: number) {
-  const W = weightsFor(c.pref);
-  const authorisation = pe.parking.authorisation === "authorised" ? 1 : 0.6;
-  const availability = pe.open ? pe.availabilityPct / 100 : 0;
-  // Cost relative to the most expensive authorised facility in the area for this stay —
-  // independent of the user's budget, which is applied as a filter instead.
-  const cost = maxCost > 0 ? Math.max(0, 1 - pe.cost / maxCost) : 1;
-  const walk = Math.max(0, 1 - walkM / WALK_SCALE_M);
-  const search = Math.max(0, 1 - Math.min(pe.searchMin, 20) / 20);
-  const safety = pe.safety.score / 100;
-  const breakdown = { availability, safety, walk, cost, search, authorisation };
-  const score = 100 * (Object.keys(W) as FactorKey[]).reduce((t, k) => t + W[k] * breakdown[k], 0);
-  return { score: Math.round(score), breakdown, weights: W };
-}
-
-export function evaluateArea(c: Criteria, routes?: RouteMatrix | null): AreaEval {
-  const area = getArea(c.area);
-  // Rule: unverified / unauthorised parking is never evaluated or recommended.
-  const verified = area.parkings.filter(isRecommendable);
-  const excluded = area.parkings.filter((p) => !isRecommendable(p));
-  const parkings = verified.map((p) => evaluateParking(area, p, c));
-  const maxCost = Math.max(0, ...parkings.map((p) => p.cost));
-
-  const restaurants = area.restaurants.map<RestaurantEval>((r) => {
-    const options = parkings
-      .map<Option>((pe) => {
-        const straightM = Math.round(haversineM(r, pe.parking) / 10) * 10;
-        const routeM = routes?.[routeKey(pe.parking.id, r.id)];
-        const walkSource = routeM !== undefined ? ("route" as const) : ("estimate" as const);
-        // OSRM measures between points snapped onto the street network, so a route can come out
-        // shorter than the straight line between the actual locations; never report less than that.
-        const walkM = routeM !== undefined ? Math.max(straightM, Math.round(routeM / 10) * 10) : walkingDistanceM(r, pe.parking);
-        const issues: string[] = [];
-        const blockers: Blocker[] = [];
-        if (c.pref === "free" && pe.cost > 0) {
-          issues.push(`Paid (₹${pe.cost}) — excluded by your free-only preference`);
-          blockers.push("pref");
-        }
-        if (!pe.open) {
-          const start = c.arrival / 60;
-          const opensLater = start < pe.parking.openFrom;
-          issues.push(
-            opensLater
-              ? `Opens at ${formatHour(pe.parking.openFrom)}, after you arrive`
-              : start >= pe.parking.openTo
-                ? `Closed at your arrival time (open ${formatHour(pe.parking.openFrom)} – ${formatHour(pe.parking.openTo)})`
-                : `Closes at ${formatHour(pe.parking.openTo)}, before your ${c.hours} h stay ends`,
-          );
-          blockers.push(opensLater || start >= pe.parking.openTo ? "hours" : "stay");
-        }
-        if (walkM > c.walk) {
-          issues.push(`Walk ${walkM} m${walkSource === "route" ? " (OSM route)" : " (est.)"} exceeds your ${c.walk} m limit`);
-          blockers.push("walk");
-        }
-        if (pe.cost > c.budget) {
-          issues.push(`₹${pe.cost} exceeds your ₹${c.budget} budget`);
-          blockers.push("budget");
-        }
-        if (pe.open && pe.freeSpots < minFreeSpots(pe.parking)) {
-          issues.push(
-            pe.freeSpots === 0
-              ? "Expected to be full (simulated)"
-              : `Nearly full — only ~${pe.freeSpots} spot${pe.freeSpots === 1 ? "" : "s"} expected (simulated)`,
-          );
-          blockers.push("full");
-        }
-        const { score, breakdown, weights } = scoreOption(pe, walkM, c, maxCost);
-        return {
-          park: pe,
-          walkM,
-          walkSource,
-          straightM,
-          weights,
-          walkMin: Math.max(1, Math.round(walkM / WALK_SPEED_M_PER_MIN)),
-          score,
-          breakdown,
-          eligible: issues.length === 0,
-          issues,
-          blockers,
-        };
-      })
-      .sort((a, b) => Number(b.eligible) - Number(a.eligible) || b.score - a.score);
-    const best = options.find((o) => o.eligible) ?? null;
-    return { restaurant: r, options, best, eligible: best !== null };
+  let eligibleCombos = 0;
+  const restaurants = data.restaurants.map<RestaurantEval>((r) => {
+    const openAtArrival = r.hours ? isOpenAt(r.hours, day, c.arrival) : null;
+    const options = perParking.map<Option>(({ p, availability, cost, costLabel, openForStay }) => {
+      const straightM = Math.round(haversineM(r, p) / 10) * 10;
+      const routeM = data.routes?.[routeKey(p.id, r.id)];
+      const walkSource = routeM !== undefined ? "route" : "estimate";
+      // OSRM measures between points snapped to streets; never report less than the straight line.
+      const walkM = routeM !== undefined ? Math.max(straightM, Math.round(routeM / 10) * 10) : estimatedWalkM(r, p);
+      const issues: string[] = [];
+      const blockers: Blocker[] = [];
+      if (!prefAllows(p, c.pref)) {
+        blockers.push("pref");
+        issues.push(c.pref === "free" ? (p.category === "paid" ? "Paid parking" : "Not confirmed as free") : "Free parking (you chose paid)");
+      }
+      if (openForStay === false) {
+        blockers.push("hours");
+        issues.push(`Not open for your whole stay (${p.openingHours})`);
+      }
+      if (walkM > c.walk) {
+        blockers.push("walk");
+        issues.push(`${walkM} m walk is over your ${c.walk} m limit`);
+      }
+      if (cost !== null && cost > c.budget) {
+        blockers.push("budget");
+        issues.push(`₹${cost} is over your ₹${c.budget} budget`);
+      }
+      const o: Option = {
+        parking: p,
+        walkM,
+        walkSource,
+        straightM,
+        walkMin: Math.max(1, Math.round(walkM / WALK_M_PER_MIN)),
+        cost,
+        costLabel,
+        availability,
+        openForStay,
+        eligible: blockers.length === 0,
+        issues,
+        blockers,
+        tags: [],
+        rank: 0,
+      };
+      o.rank = rankOf(o);
+      return o;
+    });
+    options.sort((a, b) => Number(b.eligible) - Number(a.eligible) || b.rank - a.rank || a.walkM - b.walkM);
+    const eligibleOpts = options.filter((o) => o.eligible);
+    tagOptions(eligibleOpts);
+    eligibleCombos += eligibleOpts.length;
+    const best = openAtArrival === false ? null : (eligibleOpts[0] ?? null);
+    const reason =
+      openAtArrival === false ? `Closed at ${formatTime(c.arrival)} (${r.openingHours})` : best ? describe(best) : nearestIssue(options, c);
+    return { restaurant: r, distanceM: Math.round(haversineM(data.center, r)), openAtArrival, options, best, eligible: best !== null, reason };
   });
 
+  restaurants.sort(
+    (a, b) => Number(b.eligible) - Number(a.eligible) || (b.best?.rank ?? 0) - (a.best?.rank ?? 0) || a.distanceM - b.distanceM,
+  );
   return {
-    area,
-    parkings,
     restaurants,
-    excludedUnverified: excluded.length,
-    excluded,
+    top: restaurants.filter((r) => r.eligible).slice(0, 3),
+    eligibleCombos,
+    totalCombos: data.restaurants.length * data.parkings.length,
   };
 }
 
-export function topRecommendations(c: Criteria, n = 3, routes?: RouteMatrix | null) {
-  const ev = evaluateArea(c, routes);
-  const ranked = ev.restaurants
-    .filter((r) => r.eligible && r.best)
-    .sort((a, b) => b.best!.score - a.best!.score || b.restaurant.rating - a.restaurant.rating);
-  return { ...ev, top: ranked.slice(0, n), rankedCount: ranked.length };
-}
-
-const FACTOR_LABEL: Record<FactorKey, string> = {
-  availability: "simulated availability",
-  safety: "safety indicators",
-  cost: "parking cost",
-  walk: "walking distance",
-  search: "search time",
-  authorisation: "authorisation status",
-};
-
-/** Weighted points each factor contributes to an option's score. */
-export function contributions(o: Option): Record<FactorKey, number> {
-  const out = {} as Record<FactorKey, number>;
-  for (const k of Object.keys(o.weights) as FactorKey[]) out[k] = 100 * o.weights[k] * o.breakdown[k];
-  return out;
-}
-
-function describeFactor(k: FactorKey, a: Option, b: Option) {
-  switch (k) {
-    case "availability":
-      return `${Math.abs(a.park.availabilityPct - b.park.availabilityPct)} points ${a.park.availabilityPct > b.park.availabilityPct ? "more" : "less"} simulated availability`;
-    case "cost":
-      if (a.park.cost === 0 && b.park.cost > 0) return `free parking versus ₹${b.park.cost}`;
-      if (b.park.cost === 0 && a.park.cost > 0) return `₹${a.park.cost} parking versus free`;
-      return `₹${Math.abs(a.park.cost - b.park.cost)} ${a.park.cost < b.park.cost ? "cheaper" : "dearer"} parking`;
-    case "safety":
-      return `${Math.abs(a.park.safety.score - b.park.safety.score)} points ${a.park.safety.score > b.park.safety.score ? "higher" : "lower"} parking safety score`;
-    case "authorisation":
-      return a.park.parking.authorisation === "authorised" ? "a fully authorised facility versus shared parking" : "shared (owner-permitted) parking versus an authorised facility";
-    case "walk":
-      return `${Math.abs(a.walkM - b.walkM)} m ${a.walkM < b.walkM ? "shorter" : "longer"} walk`;
-    case "search":
-      return `${Math.abs(a.park.searchMin - b.park.searchMin)} min ${a.park.searchMin < b.park.searchMin ? "less" : "more"} searching`;
+function tagOptions(opts: Option[]) {
+  if (!opts.length) return;
+  opts[0]!.tags.push("best-match");
+  const known = opts.filter((o) => o.cost !== null);
+  if (known.length) {
+    const min = Math.min(...known.map((o) => o.cost!));
+    known.filter((o) => o.cost === min).sort((a, b) => a.walkM - b.walkM)[0]!.tags.push("cheapest");
   }
+  const byWalk = [...opts].sort((a, b) => a.walkM - b.walkM);
+  const avail = byWalk.find((o) => o.availability.level === "low" || o.availability.level === "moderate");
+  if (avail) avail.tags.push("closest-available");
+  if (byWalk[0] && byWalk[0] !== avail) byWalk[0].tags.push("shortest-walk");
 }
 
-/** Biggest factor where `a` beats `b` (or loses to it with sign = -1). */
-function keyFactor(a: Option, b: Option, sign: 1 | -1): FactorKey | null {
-  const ca = contributions(a);
-  const cb = contributions(b);
-  let best: FactorKey | null = null;
-  let bestGap = 0.5; // ignore sub-point differences
-  for (const k of Object.keys(FACTOR_LABEL) as FactorKey[]) {
-    const gap = sign * (ca[k] - cb[k]);
-    if (gap > bestGap) {
-      bestGap = gap;
-      best = k;
-    }
-  }
-  return best;
+/** One plain line, e.g. "Free · 220 m walk · likely spaces (predicted)". */
+export function describe(o: Option) {
+  const price = o.cost === 0 ? "Free" : o.cost !== null ? `₹${o.cost}` : "Price unknown";
+  const avail = o.availability.kind === "unknown" ? "availability unknown" : `${o.availability.label.toLowerCase()} (${o.availability.kind === "image-estimate" ? "image estimate" : o.availability.kind})`;
+  return `${price} · ${o.walkM} m walk · ${avail}`;
 }
 
-/**
- * Plain-language reason for each rank, comparing every pick with its neighbours.
- * `ranked` must be sorted best-first and contain only eligible restaurants.
- */
-export function rankReasons(ranked: RestaurantEval[], n = 3): string[] {
-  return ranked.slice(0, n).map((r, i) => {
-    const o = r.best!;
-    const above = i > 0 ? ranked[i - 1] : undefined;
-    const below = ranked[i + 1];
-    const parts: string[] = [];
-    if (!above) {
-      parts.push(`Ranked #1 with the highest score (${o.score}/100)`);
-    } else {
-      const ao = above.best!;
-      if (ao.score === o.score) {
-        parts.push(`Ranked #${i + 1}: ties with ${above.restaurant.name} on ${o.score}/100 but has a lower rating (${r.restaurant.rating} vs ${above.restaurant.rating})`);
-      } else {
-        const lose = keyFactor(o, ao, -1);
-        parts.push(
-          `Ranked #${i + 1} (${o.score}/100), ${ao.score - o.score} points behind ${above.restaurant.name}` +
-            (lose ? ` mainly due to ${describeFactor(lose, o, ao)}` : ""),
-        );
+function nearestIssue(options: Option[], c: Criteria) {
+  if (!options.length) return "No public parking found nearby";
+  if (c.pref === "free" && options.every((o) => o.blockers.includes("pref"))) return "No confirmed free parking nearby";
+  const closest = [...options].sort((a, b) => a.walkM - b.walkM)[0]!;
+  return `No parking fits — nearest is ${closest.walkM} m away: ${closest.issues[0] ?? "—"}`;
+}
+
+export type FixSuggestion = { label: string; patch: Partial<Criteria>; results: number };
+
+/** One-step changes that make at least one restaurant fit, verified by re-running the engine. */
+export function suggestFixes(data: EngineInput, c: Criteria, max = 3): FixSuggestion[] {
+  const count = (patch: Partial<Criteria>) => evaluate(data, { ...c, ...patch }).restaurants.filter((r) => r.eligible).length;
+  const out: FixSuggestion[] = [];
+  const first = (cands: { label: string; patch: Partial<Criteria> }[]) => {
+    for (const cand of cands) {
+      const n = count(cand.patch);
+      if (n > 0) {
+        out.push({ ...cand, results: n });
+        return;
       }
     }
-    if (below?.best) {
-      const bo = below.best;
-      if (bo.score === o.score) {
-        parts.push(`edges ${below.restaurant.name} on rating (${r.restaurant.rating} vs ${below.restaurant.rating})`);
-      } else {
-        const win = keyFactor(o, bo, 1);
-        parts.push(
-          `ahead of ${below.restaurant.name} by ${o.score - bo.score} points` + (win ? ` thanks to ${describeFactor(win, o, bo)}` : ""),
-        );
-      }
-    }
-    return parts.join("; ") + ".";
-  });
-}
-
-export function formatTime(minutes: number) {
-  const h = Math.floor(minutes / 60) % 24;
-  const m = minutes % 60;
-  const suffix = h >= 12 ? "pm" : "am";
-  const h12 = h % 12 === 0 ? 12 : h % 12;
-  return `${h12}:${String(m).padStart(2, "0")} ${suffix}`;
-}
-
-export function statusLabel(s: ParkingStatus) {
-  return { good: "Good availability", limited: "Limited spots", scarce: "Nearly full", closed: "Closed" }[s];
+  };
+  if (c.pref === "free") first([{ label: "Include paid parking", patch: { pref: "both" } }]);
+  first(
+    [300, 600, 900]
+      .map((d) => Math.min(1500, c.walk + d))
+      .filter((w, i, a) => w > c.walk && a.indexOf(w) === i)
+      .map((w) => ({ label: `Allow ${w} m walk`, patch: { walk: w } })),
+  );
+  first(
+    [50, 100, 200]
+      .map((d) => Math.min(400, c.budget + d))
+      .filter((b, i, a) => b > c.budget && a.indexOf(b) === i)
+      .map((b) => ({ label: `Raise budget to ₹${b}`, patch: { budget: b } })),
+  );
+  first(
+    Array.from({ length: Math.max(0, Math.ceil(c.hours) - 1) }, (_, i) => Math.ceil(c.hours) - 1 - i).map((h) => ({
+      label: `Shorten stay to ${h} h`,
+      patch: { hours: h },
+    })),
+  );
+  first(
+    [-60, -120, 60]
+      .filter((d) => c.arrival + d >= 0 && c.arrival + d < 1440)
+      .map((d) => ({ label: `Arrive at ${formatTime(c.arrival + d)}`, patch: { arrival: c.arrival + d } })),
+  );
+  return out.sort((a, b) => b.results - a.results).slice(0, max);
 }

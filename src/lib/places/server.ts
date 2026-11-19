@@ -113,6 +113,11 @@ export async function fetchWalkMatrix(
   }
 }
 
+function testFixturePath() {
+  const p = typeof process !== "undefined" ? process.env["PARKWISE_TEST_FIXTURE"] : undefined;
+  return p && process.env["NODE_ENV"] !== "production" && !process.env["VERCEL"] ? p : null;
+}
+
 export async function loadPlaceData(lat: number, lng: number, f: typeof fetch = fetch): Promise<PlaceData> {
   // ~100 m grid so nearby searches share a cache entry
   const key = `${lat.toFixed(3)},${lng.toFixed(3)}`;
@@ -133,7 +138,13 @@ export async function loadPlaceData(lat: number, lng: number, f: typeof fetch = 
   let elements: OsmElement[];
   let endpoint: string;
   try {
-    ({ elements, endpoint } = await fetchOverpass(overpassQuery(lat, lng), f));
+    const fixture = testFixturePath();
+    if (fixture) {
+      // Automated tests only (never in production): synthetic OSM-format elements from a local file.
+      const { readFile } = await import("node:fs/promises");
+      elements = (JSON.parse(await readFile(fixture, "utf8")) as { elements: OsmElement[] }).elements;
+      endpoint = "https://test-fixture.invalid";
+    } else ({ elements, endpoint } = await fetchOverpass(overpassQuery(lat, lng), f));
   } catch {
     return empty("Map data service (OpenStreetMap Overpass) is not responding. Please try again in a minute.");
   }
@@ -144,7 +155,7 @@ export async function loadPlaceData(lat: number, lng: number, f: typeof fetch = 
     ...n,
     routes,
     fetchedAt: new Date().toISOString(),
-    sources: { places: `OpenStreetMap via ${new URL(endpoint).host}`, routes: routes ? "OpenStreetMap walking routes (FOSSGIS OSRM)" : null },
+    sources: { places: endpoint.includes("test-fixture") ? "TEST FIXTURE (synthetic, automated tests only)" : `OpenStreetMap via ${new URL(endpoint).host}`, routes: routes ? "OpenStreetMap walking routes (FOSSGIS OSRM)" : null },
     error: null,
   };
   placeCache.set(key, data);

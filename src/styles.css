@@ -223,3 +223,17 @@
 .pw-pin-shared { background: var(--primary); color: var(--primary-foreground); border-style: dashed; }
 .pw-pin-restricted { background: var(--busy); color: var(--ink-foreground); width: 26px; height: 26px; font-size: 13px; opacity: 0.9; }
 .pw-pin-restricted::after { display: none; }
+.pw-pin-fee-unknown { background: var(--card); color: var(--foreground); border-color: var(--ink); border-style: dashed; }
+.pw-pin-excluded { background: var(--muted); color: var(--muted-foreground); width: 24px; height: 24px; font-size: 12px; opacity: 0.85; text-decoration: line-through; }
+.pw-pin-excluded::after { display: none; }
+.pw-pin-park.no-avail::after { display: none; }
+/* Marker clusters in brand colours */
+.pw-cluster {
+  display: grid; place-items: center;
+  width: 38px; height: 38px; border-radius: 9999px;
+  background: var(--primary); color: var(--primary-foreground);
+  font-family: var(--font-display); font-weight: 800; font-size: 13px;
+  border: 3px solid var(--card);
+  box-shadow: 0 6px 16px -6px oklch(0.21 0.04 210 / 0.6);
+}
+.pw-map-fullscreen { position: fixed !important; inset: 0; z-index: 2000; height: 100vh !important; width: 100vw !important; border-radius: 0 !important; }

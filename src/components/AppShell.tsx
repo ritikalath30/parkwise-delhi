@@ -1,7 +1,7 @@
 import { Link, useRouterState } from "@tanstack/react-router";
 import { Car, FlaskConical, ShieldCheck } from "lucide-react";
 import type { ReactNode } from "react";
-import type { CriteriaSearch } from "@/lib/search";
+import type { CleanSearch } from "@/lib/search";
 import { cn } from "@/lib/utils";
 
 const STEPS = [
@@ -28,13 +28,13 @@ export function SimulatedNotice({ className }: { className?: string | undefined 
     <div className={cn("flex items-start gap-2 rounded-xl border border-signal/50 bg-signal/15 px-3 py-2 text-xs text-signal-foreground", className)}>
       <FlaskConical className="mt-0.5 h-3.5 w-3.5 shrink-0" />
       <p>
-        <strong>Prototype data.</strong> Availability and safety indicators are <strong>simulated</strong> estimates, not live data. Restaurants, facilities and prices are synthetic samples. Maps and walking routes: © OpenStreetMap contributors.
+        <strong>About the data.</strong> Places, parking and walking routes: © OpenStreetMap contributors. Availability marked PREDICTED uses <strong>simulated</strong> demand history — not live. Prices and facility details appear only when recorded; otherwise they show as unknown.
       </p>
     </div>
   );
 }
 
-export function StepNav({ search }: { search: CriteriaSearch }) {
+export function StepNav({ search }: { search: CleanSearch }) {
   const path = useRouterState({ select: (s) => s.location.pathname });
   return (
     <nav aria-label="Journey steps" className="flex items-center gap-1 overflow-x-auto">
@@ -61,7 +61,7 @@ export function StepNav({ search }: { search: CriteriaSearch }) {
   );
 }
 
-export function AppShell({ search, children }: { search: CriteriaSearch; children: ReactNode }) {
+export function AppShell({ search, children }: { search: CleanSearch; children: ReactNode }) {
   return (
     <div className="flex min-h-screen flex-col bg-background">
       <header className="sticky top-0 z-[1100] border-b border-border bg-background/90 backdrop-blur">
@@ -84,11 +84,11 @@ export function SiteFooter() {
       <div className="mx-auto flex max-w-7xl flex-col gap-3 px-4 py-6 text-sm md:flex-row md:items-center md:justify-between">
         <div className="flex items-center gap-2">
           <Car className="h-4 w-4 text-signal" />
-          <span>ParkWise GeoAI — prototype for Delhi's busiest dining districts.</span>
+          <span>ParkWise — find restaurants with usable parking nearby. Prototype.</span>
         </div>
         <div className="flex items-center gap-2 text-ink-foreground/70">
           <ShieldCheck className="h-4 w-4 text-ok" />
-          Only authorised or owner-permitted parking is recommended. Availability and safety are simulated.
+          Only parking recorded as publicly accessible is suggested. Map data © OpenStreetMap contributors.
         </div>
       </div>
     </footer>

@@ -31,12 +31,11 @@ use the editor.
 
 ## Project rules
 
-- Journey is three stages: Search (`/`) → Explore (`/explore`, map + top-3 picks + parking comparison) → Plan (`/plan`). `/map` and `/recommendations` only redirect to `/explore`.
-- Eligibility filters (authorisation, preference, opening hours, walk, budget, availability floor) run BEFORE scoring. Cost and walking are scored on absolute scales, so budget and walk limit act purely as filters.
-- Parking Safety Score lives in pure `src/lib/safety.ts` from SYNTHETIC indicators in `data.ts`; it is a ranking factor only — authorisation stays a hard filter, and UI copy must never claim a facility is safe.
-- OSM walking distances come from one OSRM table request per area (`src/lib/walk-matrix.server.ts`, loaded by the Explore/Plan route loaders and the AI server function); when unavailable the engine falls back to straight line × 1.3 and labels it "est.".
-- Recommendation scoring lives in pure `src/lib/engine.ts` and is shared by the UI and the AI server function; the server recomputes picks so the AI only explains verified parking that passed every filter.
-- Sample data lives in `src/lib/data.ts`; parking with `verified: false` must never reach recommendations (covered by `src/test/recommend.test.ts`).
+- Journey: Search (`/`, any destination via `/api/geocode` → Photon) → Explore (`/explore`) → Plan (`/plan`). `/map` and `/recommendations` only redirect to `/explore`; legacy `?area=` links resolve to coordinates in `src/lib/search.ts`.
+- Real data only: restaurants and parking come from OpenStreetMap via Overpass (`src/lib/places/server.ts`, normalised in `src/lib/places/osm.ts`), walking distances from FOSSGIS OSRM. Missing fields stay null and the UI shows "Unknown" — never invent prices, capacity, ratings, hours or facts.
+- Parking categories: FREE (fee=no), PAID (fee=yes), FEE UNKNOWN (public, fee not recorded), SHARED (needs an owner-permission source; none integrated). Private / customers-only / no-access / unmarked roadside parking goes to `excluded` and is never recommended.
+- Availability is a provider chain in `src/lib/availability.ts`: LIVE and IMAGE ESTIMATE are not operational (awaiting integration / experimental) and return nothing; PREDICTED uses a SIMULATED demand history and must always be labelled as such.
+- Eligibility filters (preference, opening hours for the whole stay, walking limit, known price vs budget, restaurant open at arrival) run BEFORE ranking in pure `src/lib/engine.ts`. Users see plain tags (Best match, Cheapest, Closest with likely spaces, Shortest walk) — no numeric scores and no safety scores.
 - Trip criteria travel between screens as validated URL search params (`src/lib/search.ts`), so every screen is shareable and needs no login or storage.
-- Leaflet is browser-only: import it only in `src/components/ParkMap.tsx`, loaded lazily through `MapView` behind `ClientOnly`. Markers persist across renders and selection only restyles them (rebuilding on every click destroyed open popups).
-- Rank reasons and fallback explanations come from `src/lib/explain.ts`; the AI only rewords them, so explanations are shown instantly and never contradict the scores.
+- Leaflet is browser-only: import it only in `src/components/ParkMap.tsx`, loaded lazily through `MapView` behind `ClientOnly`. Markers persist across renders and selection only restyles them.
+- Tests: `src/test/fixtures/osm-test-area.json` is a SYNTHETIC test fixture. Set `PARKWISE_TEST_FIXTURE` to its path to use it instead of Overpass in local dev/E2E; it is ignored in production and on Vercel.
