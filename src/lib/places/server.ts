@@ -2,7 +2,7 @@
 // All three are free public services with fair-use policies, so results are cached per instance
 // and responses carry CDN cache headers in the API routes.
 import { haversineM } from "../geo";
-import demoData from "./demo-delhi.json";
+import delhi from "./delhi-osm.json";
 import { normaliseOverpass, LIMITS, type OsmElement } from "./osm";
 import type { GeocodeResult, PlaceData } from "./types";
 
@@ -15,8 +15,8 @@ const OVERPASS = [
 ] as const;
 const OSRM_TABLE = "https://routing.openstreetmap.de/routed-foot/table/v1/foot/";
 const PHOTON = "https://photon.komoot.io/api/";
-/** minLon,minLat,maxLon,maxLat — India */
-const SEARCH_BBOX = "68.1,6.5,97.4,35.7";
+/** minLon,minLat,maxLon,maxLat */
+const SEARCH_BBOX = "76.98,28.43,77.50,28.74"; // area covered by the bundled Delhi snapshot
 
 type CacheEntry<T> = { at: number; value: T };
 function memo<T>(ttlMs: number, max = 300) {
@@ -126,15 +126,19 @@ export async function loadPlaceData(lat: number, lng: number, f: typeof fetch = 
   const center = { lat, lng };
   const env = typeof process !== "undefined" ? process.env : {};
 
-  // Source chain: test fixture (dev only) → Geoapify (if keyed) → Overpass → Delhi DEMO DATA.
+  // Source chain: test fixture (dev only) → bundled Delhi OSM snapshot → Geoapify (if keyed) → live Overpass.
   let elements: OsmElement[] | null = null;
   let source = "";
-  let demo = false;
+  let activity: number | null = null;
   const fixture = testFixturePath();
   if (fixture) {
     const { readFile } = await import("node:fs/promises");
     elements = (JSON.parse(await readFile(fixture, "utf8")) as { elements: OsmElement[] }).elements;
     source = "TEST FIXTURE (synthetic, automated tests only)";
+  }
+  if (!elements && inDelhi(lat, lng)) {
+    ({ elements, activity } = delhiNear(lat, lng));
+    source = `OpenStreetMap snapshot of Delhi (${delhi.snapshot})`;
   }
   const geoKey = env["GEOAPIFY_API_KEY"];
   if (!elements && geoKey) {
@@ -154,28 +158,22 @@ export async function loadPlaceData(lat: number, lng: number, f: typeof fetch = 
       liveDownUntil = Date.now() + 2 * 60 * 1000;
     }
   }
-  if (!elements) {
-    const d = demoNear(lat, lng);
-    if (!d)
-      return {
-        center,
-        restaurants: [],
-        parkings: [],
-        excluded: [],
-        activityCount: null,
-        routes: null,
-        fetchedAt: new Date().toISOString(),
-        sources: { places: "OpenStreetMap", routes: null },
-        demo: false,
-        error: "Live map data is unavailable right now, and there is no demo data for this location. Demo data covers Hauz Khas Village, Khan Market, Connaught Place and Saket.",
-      };
-    elements = d.elements;
-    source = `DEMO DATA — fictional places near ${d.area} (live map data unavailable)`;
-    demo = true;
-  }
+  if (!elements)
+    return {
+      center,
+      restaurants: [],
+      parkings: [],
+      excluded: [],
+      activityCount: null,
+      routes: null,
+      fetchedAt: new Date().toISOString(),
+      sources: { places: "OpenStreetMap", routes: null },
+      demo: false,
+      error: "This prototype currently covers Delhi. Live map data for other places is unavailable right now.",
+    };
 
   const n = normaliseOverpass(elements, center);
-  if (demo) for (const p of [...n.parkings, ...n.excluded]) p.url = "";
+  if (activity !== null) n.activityCount = activity;
   const routes = await fetchWalkMatrix(n.parkings, n.restaurants, f);
   const data: PlaceData = {
     center,
@@ -183,26 +181,32 @@ export async function loadPlaceData(lat: number, lng: number, f: typeof fetch = 
     routes,
     fetchedAt: new Date().toISOString(),
     sources: { places: source, routes: routes ? "OpenStreetMap walking routes (FOSSGIS OSRM)" : null },
-    demo,
+    demo: false,
     error: null,
   };
-  placeCache.set(key, data, demo ? 5 * 60 * 1000 : undefined);
+  placeCache.set(key, data);
   return data;
 }
 
-function demoNear(lat: number, lng: number) {
-  const near = demoData.areas
-    .map((a) => ({ a, d: haversineM({ lat, lng }, a) }))
-    .sort((x, y) => x.d - y.d)[0];
-  if (!near || near.d > 3000) return null;
-  // Same search radii as the live query
-  const elements = (demoData.elements as OsmElement[]).filter((e) => {
-    const pos = e.lat !== undefined ? { lat: e.lat, lng: e.lon! } : e.center ? { lat: e.center.lat, lng: e.center.lon } : null;
-    if (!pos) return false;
-    const d = haversineM({ lat, lng }, pos);
+const B = { minLat: 28.43, maxLat: 28.74, minLng: 76.98, maxLng: 77.5 };
+function inDelhi(lat: number, lng: number) {
+  return lat >= B.minLat && lat <= B.maxLat && lng >= B.minLng && lng <= B.maxLng;
+}
+
+/** Elements of the bundled Delhi snapshot within the usual search radii, plus a commercial-activity count. */
+function delhiNear(lat: number, lng: number): { elements: OsmElement[]; activity: number } {
+  const c = { lat, lng };
+  // cheap bounding pre-filter (~0.02° ≈ 2 km) before exact distances
+  const elements = (delhi.elements as OsmElement[]).filter((e) => {
+    const la = e.lat ?? e.center!.lat;
+    const lo = e.lon ?? e.center!.lon;
+    if (Math.abs(la - lat) > 0.02 || Math.abs(lo - lng) > 0.02) return false;
+    const d = haversineM(c, { lat: la, lng: lo });
     return e.tags?.amenity === "parking" ? d <= LIMITS.parkingRadiusM : d <= LIMITS.foodRadiusM;
   });
-  return { area: near.a.name, elements };
+  let shops = 0;
+  for (const [la, lo] of delhi.shops as [number, number][]) if (Math.abs(la - lat) < 0.006 && Math.abs(lo - lng) < 0.006 && haversineM(c, { lat: la, lng: lo }) <= 500) shops++;
+  return { elements, activity: shops };
 }
 
 export const __resetLiveState = () => {
@@ -222,7 +226,7 @@ export async function geocode(q: string, bias: { lat: number; lng: number } | nu
   url.searchParams.set("q", query);
   url.searchParams.set("limit", "7");
   url.searchParams.set("lang", "en");
-  // Delhi-first prototype: keep suggestions inside India. Widen this box to launch other countries.
+  // Delhi-first prototype: only suggest places covered by the bundled Delhi data. Widen per city launch.
   url.searchParams.set("bbox", SEARCH_BBOX);
   if (bias) {
     url.searchParams.set("lat", String(bias.lat));

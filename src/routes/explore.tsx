@@ -136,14 +136,16 @@ function ExploreScreen() {
           </div>
 
           <aside className="order-2 flex min-w-0 flex-col gap-3 lg:order-1">
-            <div className="rounded-2xl border border-border bg-card shadow-[var(--shadow-card)]">
-              <button className="flex w-full items-center justify-between px-3 py-2 text-sm font-semibold lg:hidden" onClick={() => setFiltersOpen((o) => !o)} aria-expanded={filtersOpen}>
-                <span className="flex items-center gap-1.5"><SlidersHorizontal className="h-4 w-4 text-primary" /> Filters</span>
+            <div className="rounded-2xl border border-border bg-card">
+              <button className="flex w-full items-center justify-between px-3 py-2 text-sm font-semibold" onClick={() => setFiltersOpen((o) => !o)} aria-expanded={filtersOpen}>
+                <span className="flex items-center gap-1.5"><SlidersHorizontal className="h-4 w-4 text-primary" /> Edit trip</span>
                 <ChevronDown className={cn("h-4 w-4 transition", filtersOpen && "rotate-180")} />
               </button>
-              <div className={cn("p-3 pt-0 lg:block lg:pt-3", !filtersOpen && "hidden")}>
-                <TripAdjuster search={search} onChange={update} />
-              </div>
+              {filtersOpen && (
+                <div className="border-t border-border p-3">
+                  <TripAdjuster search={search} onChange={update} />
+                </div>
+              )}
             </div>
 
             {places.isLoading && (

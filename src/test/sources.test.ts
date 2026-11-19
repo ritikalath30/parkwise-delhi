@@ -10,30 +10,36 @@ describe("place-data source chain", () => {
     __resetLiveState();
   });
 
-  it("falls back to clearly labelled DEMO DATA near a Delhi demo area when live sources fail", async () => {
+  it("serves real OpenStreetMap data for Delhi from the bundled snapshot, without any network call", async () => {
     const d = await loadPlaceData(28.5539, 77.1942, down);
     expect(d.error).toBeNull();
-    expect(d.demo).toBe(true);
-    expect(d.sources.places).toMatch(/^DEMO DATA/);
-    expect(d.restaurants.length).toBeGreaterThan(0);
-    expect(d.parkings.every((p) => p.name?.startsWith("Demo ") && p.url === "")).toBe(true);
-    expect(d.parkings.every((p) => p.name?.includes("Hauz Khas Village"))).toBe(true); // no far-away demo areas
-    expect(d.parkings.map((p) => p.name)).not.toContain("Demo Private Residents' Lot (Hauz Khas Village)");
+    expect(d.demo).toBe(false);
+    expect(d.sources.places).toMatch(/^OpenStreetMap snapshot of Delhi/);
+    expect(d.restaurants.length).toBeGreaterThan(5);
+    expect(d.parkings.length).toBeGreaterThan(0);
+    expect(d.parkings.every((p) => p.url.startsWith("https://www.openstreetmap.org/"))).toBe(true);
+    expect(d.activityCount).toBeGreaterThan(0);
   });
 
-  it("returns an explicit error (no invented places) outside demo coverage", async () => {
+  it("covers other Delhi areas too (Khan Market, Connaught Place, Lajpat Nagar)", async () => {
+    for (const [lat, lng] of [[28.6001, 77.2265], [28.6315, 77.2167], [28.5677, 77.2433]] as const) {
+      const d = await loadPlaceData(lat, lng, down);
+      expect(d.restaurants.length).toBeGreaterThan(5);
+    }
+  });
+
+  it("returns an explicit error (no invented places) outside Delhi when live sources fail", async () => {
     const d = await loadPlaceData(19.0583, 72.8302, down); // Mumbai
-    expect(d.demo).toBe(false);
     expect(d.restaurants).toHaveLength(0);
-    expect(d.error).toMatch(/no demo data for this location/);
+    expect(d.error).toMatch(/covers Delhi/);
   });
 
   it("uses live OpenStreetMap data when Overpass answers", async () => {
     const ok = (async (u: string | URL) =>
       String(u).includes("interpreter")
-        ? Response.json({ elements: [{ type: "node", id: 1, lat: 28.6, lon: 77.2, tags: { amenity: "parking", fee: "no" } }, { type: "node", id: 2, lat: 28.6001, lon: 77.2, tags: { amenity: "cafe", name: "Real Café" } }] })
+        ? Response.json({ elements: [{ type: "node", id: 1, lat: 19.06, lon: 72.83, tags: { amenity: "parking", fee: "no" } }, { type: "node", id: 2, lat: 19.0601, lon: 72.83, tags: { amenity: "cafe", name: "Real Café" } }] })
         : new Response("no", { status: 500 })) as unknown as typeof fetch;
-    const d = await loadPlaceData(28.6, 77.2, ok);
+    const d = await loadPlaceData(19.06, 72.83, ok); // outside Delhi → live source
     expect(d.demo).toBe(false);
     expect(d.sources.places).toMatch(/^OpenStreetMap via/);
     expect(d.restaurants[0]!.name).toBe("Real Café");
