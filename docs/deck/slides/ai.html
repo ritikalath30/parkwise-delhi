@@ -1,0 +1,23 @@
+<section id="ai" style="gap:26px;">
+<p class="eyebrow">05 · AI INTEGRATION IN THE CORE FLOW</p>
+<h2 style="font-size:52px;">AI is used where it adds value (understanding intent) and kept away from facts, so recommendations stay trustworthy</h2>
+<div class="pipe">
+<div class="n2 ai"><span class="k">AI · INTENT</span><h3>Understand</h3><p>MiniLM sentence model embeds each phrase, matches by meaning</p></div><div class="a2">→</div>
+<div class="n2 ai"><span class="k">AI · SLOT FILLING</span><h3>Extract + clarify</h3><p>Place, time, duration, budget, walk; asks if time is missing</p></div><div class="a2">→</div>
+<div class="n2"><span class="k">GEOCODE</span><h3>Resolve place</h3><p>1,773-place Delhi index; typo-tolerant ("khaan market")</p></div><div class="a2">→</div>
+<div class="n2"><span class="k">FILTER</span><h3>Eligibility</h3><p>Legal, open whole stay, budget, walk limit</p></div><div class="a2">→</div>
+<div class="n2"><span class="k">RANK + ROUTE</span><h3>Recommend</h3><p>Real walking routes (OSRM), plain-language tags</p></div>
+</div>
+<table class="t">
+<tr><th style="width:24%;">PRODUCT DECISION</th><th style="width:34%;">WHAT I CHOSE</th><th>WHY</th></tr>
+<tr><td><b>Where the model runs</b></td><td>On-device MiniLM (in the browser); cloud LLM (Claude) wired as optional upgrade</td><td>₹0 per query, no API key exposed, user text never leaves the phone</td></tr>
+<tr><td><b>What AI may decide</b></td><td>Only user intent, never places, prices or hours</td><td>No hallucinated car parks; facts come from map data</td></tr>
+<tr><td><b>Human in the loop</b></td><td>Shows what it understood + confidence (e.g. "elderly parents" → short walk, 83%); editable</td><td>Builds trust; errors are visible and correctable</td></tr>
+<tr><td><b>Evaluation</b></td><td>46 automated tests incl. typos and intents; live metric: % requests needing no edit</td><td>Target ≥ 80% no-edit rate in pilot</td></tr>
+<tr><td><b>Geospatial AI (built)</b></td><td>Radius search over 3,281 restaurants / 934 lots; legality classification from OSM tags; opening-hours parsing across midnight; OSRM road-network walking matrix; typo-tolerant geocoding</td><td>Facts and distances are computed, not guessed</td></tr>
+<tr><td><b>Computer vision (future)</b></td><td>Vehicle detection (YOLO-class model) on ≤0.5 m satellite or lot CCTV to estimate occupancy; spatio-temporal demand forecasting from real counts</td><td>"Image estimate" slot already in the product; not live: needs licensed imagery and a validated model</td></tr>
+</table>
+<p class="src"><b>Stack:</b> React + TanStack Start on Vercel · transformers.js running MiniLM-L6 (q8, ONNX/WASM) in-browser · OpenStreetMap Delhi snapshot (BBBike, 14 Nov 2026) · Photon geocoding · FOSSGIS OSRM walking routes · Leaflet maps · 46 automated tests</p>
+<div class="footer"><span>ParkWise · PM case</span><span class="pg"></span></div>
+<aside>If asked "is this real AI?": yes, a transformer language model doing semantic intent classification in the browser. I deliberately kept the LLM away from facts to avoid hallucination.</aside>
+</section>

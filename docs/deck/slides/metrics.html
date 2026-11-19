@@ -1,0 +1,29 @@
+<section id="metrics" style="gap:22px;">
+<p class="eyebrow">07 · SUCCESS METRICS</p>
+<h2>Success is measured by legal, completed outings, with hard guardrails that protect user trust</h2>
+<div class="grid2" style="grid-template-columns:0.8fr 1.2fr; gap:28px;">
+<div class="card hl" style="padding:26px;">
+<p class="tag">NORTH STAR METRIC</p>
+<h3 style="font-size:38px;">Successful parked outings / week</h3>
+<p style="font-size:21px;">Plans where the user reached the suggested legal car park and the restaurant (directions completed or one-tap check-in). Captures delivered value, not app opens.</p>
+<div class="kpi c"><b style="font-size:70px;">500 / wk</b><span>Connaught Place, by month 3 of the pilot</span></div>
+</div>
+<div style="display:flex; flex-direction:column; gap:10px;">
+<p class="tag" style="font-size:19px; font-weight:900; letter-spacing:2px; color:var(--coral-text);">INPUT METRICS (LEADING INDICATORS) · PILOT TARGET</p>
+<div class="leaf"><p><b>Activation:</b> searches → plan opened</p><b>≥ 40%</b></div>
+<div class="leaf"><p><b>Intent:</b> plans → directions tapped</p><b>≥ 50%</b></div>
+<div class="leaf"><p><b>AI quality:</b> requests understood with no manual edit</p><b>≥ 80%</b></div>
+<div class="leaf"><p><b>Data coverage:</b> recommended lots with known price + hours</p><b>2% → 60%</b></div>
+<div class="leaf"><p><b>Retention:</b> users planning again within 30 days</p><b>≥ 25%</b></div>
+</div>
+</div>
+<table class="t">
+<tr><th style="width:22%;">GUARDRAIL</th><th style="width:16%;">THRESHOLD</th><th style="width:31%;">WHY IT MATTERS</th><th>IF BREACHED</th></tr>
+<tr><td><b>Illegal recommendations</b></td><td>0 private / restricted lots</td><td>One tow destroys trust and creates liability</td><td>Block release; remove lot; audit source data</td></tr>
+<tr><td><b>Bad arrivals</b></td><td>&lt; 5 "full or closed" per 100 plans</td><td>Prediction quality must not erode trust</td><td>Downgrade lot to "unknown"; widen alternatives</td></tr>
+<tr><td><b>Walk promise</b></td><td>0 plans above user's walk limit</td><td>Core promise for families and elderly</td><td>Fix routing; never relax the filter silently</td></tr>
+<tr><td><b>Latency</b></td><td>&lt; 3 s sentence → results (p90)</td><td>Planning happens on the go</td><td>Cache areas; trim model; fall back to rules</td></tr>
+</table>
+<div class="footer"><span>ParkWise · PM case</span><span class="pg"></span></div>
+<aside>Targets are proposed pilot goals, not measured results. Data coverage today: 4 priced lots out of 174 that record a fee ≈ 2%.</aside>
+</section>

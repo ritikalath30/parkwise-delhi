@@ -73,3 +73,46 @@ Metric targets and prices are proposed, not measured. Say so if asked.
   - "Is availability real-time?" No: it's a labelled prediction, and real-time needs operator partnerships.
   - "Where's the AI?" On-device MiniLM intent understanding, with Claude as an optional upgrade.
   - "Why not booking?" Delhi has little bookable inventory.
+
+## Deck: final state and instructions for the next AI (supersedes the outline above)
+The slide source (HTML + CSS) is in `docs/deck/`. Screenshots are hosted inside the claude.ai artifact (`/_blob/...` paths). Recreate them from the live app if you rebuild the deck elsewhere.
+
+**Style rules:**
+- Consulting (BCG-like) style.
+- White background; the Tata 1mg coral #FF6F61 is used only as a restrained accent.
+- Every title is a full-sentence takeaway ("action title") with a rule under it.
+- Executive summary is slide 2.
+- Sources go in a footnote on each slide.
+- Plain language.
+- Do NOT name frameworks (no "RICE", "JTBD" labels in titles). Use PM terms naturally.
+- No placeholders, no invented numbers. Label assumptions.
+
+**Slide order and content:**
+1. **Cover:** one-liner and a clickable link to https://parkwise-delhi.vercel.app.
+2. **Executive summary:** 6 numbered points (problem, insight, solution, AI, proof, ask).
+3. **Problem:** two personas (family host, young couple/friends), the user need statement, and 4 cited stats:
+   - 20.7 L private cars (Delhi Statistical Handbook 2023)
+   - ~20 min parking search (IBM Global Parking Survey 2011)
+   - ~30% of congestion is cars cruising for parking (CSE via Swarajya)
+   - 205 of 934 lots private (own OSM analysis)
+4. **Insight:** a table of workaround → pain point → evidence (cites the Delhi Parking Rules 2019), plus 4 insights.
+5. **Solution:** 4 alternatives scored on users reached, value, certainty and build effort; chosen MVP scope and what's out of scope.
+6. **Journey:** Describe (AI) → Clarify (AI) → Explore → Compare → Plan, with a screenshot.
+7. **AI integration:**
+   - Pipeline: intent → slot filling → geocode → filter → rank/route.
+   - Decision table: on-device MiniLM vs. cloud LLM; AI decides intent only; human in the loop with confidence scores; evaluation (46 tests, ≥80% no-edit target).
+   - Geospatial AI (built): radius search, legality classification from OSM tags, opening hours, OSRM walking matrix, typo-tolerant geocoding.
+   - Computer vision (NOT built, future): YOLO-class vehicle detection on ≤0.5 m satellite imagery or CCTV to estimate occupancy, plus demand forecasting. The "image estimate" slot exists in the code but returns nothing.
+   - Tech stack line.
+8. **Prototype:** link, 3 screenshots, 6 real learnings (Overpass failures → snapshot; demo data killed trust; legality filter; AI box plus form felt forced; silent assumptions like "khaan market" and default time; data gap is the moat).
+9. **Metrics:**
+   - North Star: successful parked outings per week (500/week in CP by month 3).
+   - 5 leading metrics with targets.
+   - Guardrail table: threshold, why it matters, action if breached.
+10. **Market:**
+    - TAM 20.7 L → SAM 5.2 L (25% assumption) → SOM 21K (4%).
+    - Revenue: restaurant listing ₹1,500/month (150 → ₹27 L/yr), operator commission 10–15%, API.
+    - Alternatives: Google Maps, Zomato/District, Park+, Get My Parking, valet. Positioning statement.
+11. **Risks and next steps:** risk table with likelihood/impact and mitigations; 0–30 / 31–60 / 61–90 day plan; scale-or-stop rule.
+
+**Still to do:** add the presenter's name to the cover; run 3–5 driver interviews and cite them on slide 4; view every slide once after export.

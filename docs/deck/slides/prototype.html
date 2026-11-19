@@ -1,0 +1,22 @@
+<section id="prototype" style="gap:22px;">
+<p class="eyebrow">06 · PROTOTYPE &amp; LEARNINGS</p>
+<div class="row" style="justify-content:space-between; align-items:center;">
+<h2>The prototype works end to end on real Delhi data; building it surfaced six lessons that shape the roadmap · <a class="link" href="https://parkwise-delhi.vercel.app" target="_blank">parkwise-delhi.vercel.app</a></h2>
+<span class="chip dk">END-TO-END · NO LOGIN</span>
+</div>
+<div style="display:grid; grid-template-columns: 0.6fr 1.25fr 1fr; gap:22px; height:300px;">
+<div class="shotbox"><img src="/_blob/ee8237fd5cbd5d6f4556cd8e5c9689f5" alt="Describe the plan"></div>
+<div class="shotbox"><img src="/_blob/f7f6fdf8513d3a84e32a704445f061e7" alt="Explore restaurants, legal parking and map"></div>
+<div class="shotbox"><img src="/_blob/7d1db9b364d423a4a90fe2233a9e31c0" alt="Plan with walk, charge and directions"></div>
+</div>
+<div class="grid3" style="gap:14px;">
+<div class="lrn"><span class="k">1 · INFRA RISK</span><p>Free live map API (Overpass) kept failing with timeouts and 502s, even in production. <b>Fix:</b> bundled a Delhi OpenStreetMap snapshot. <b>Lesson:</b> never put a free third-party API on the critical path.</p></div>
+<div class="lrn"><span class="k">2 · TRUST</span><p>Early "demo" sample data made every result look fake. <b>Fix:</b> real data only, gaps labelled "fee unknown". <b>Lesson:</b> honest uncertainty earns more trust than fake precision.</p></div>
+<div class="lrn"><span class="k">3 · LEGALITY</span><p>205 of 934 lots were private or customers-only and would have been recommended. <b>Fix:</b> eligibility filter before ranking. <b>Lesson:</b> encode non-negotiables as hard rules.</p></div>
+<div class="lrn"><span class="k">4 · AI UX</span><p>An AI box plus a full form felt like forced AI. <b>Fix:</b> one sentence first; the form appears only for review. <b>Lesson:</b> AI should remove steps, not add one.</p></div>
+<div class="lrn"><span class="k">5 · SILENT ASSUMPTIONS</span><p>"Dinner at khaan market" picked Khanna Market and a default time. <b>Fix:</b> typo-tolerant matching + asking for missing time. <b>Lesson:</b> ask, don't assume, on critical inputs.</p></div>
+<div class="lrn"><span class="k">6 · DATA GAP = MOAT</span><p>Only 4 of 934 lots list a price; Khan Market has few mapped lots. <b>Lesson:</b> the product's defensibility is the data layer: operator partnerships and crowd-sourced prices.</p></div>
+</div>
+<div class="footer"><span>ParkWise · PM case</span><span class="pg"></span></div>
+<aside>Demo: type "Dinner at Connaught Place with my elderly parents, happy to pay for parking" → set time → See restaurants &amp; parking → switch a car park → Plan this visit.</aside>
+</section>
