@@ -70,7 +70,7 @@ function SearchScreen() {
               onResult={(patch, go) => {
                 const next = cleanSearch({ ...form, ...patch });
                 setForm(next);
-                if (go && hasDestination(next)) setTimeout(() => navigate({ to: "/explore", search: next }), 900);
+                if (go && hasDestination(next)) setTimeout(() => navigate({ to: "/explore", search: next }), 2500);
               }}
             />
             <div className="flex items-center gap-3 text-xs text-muted-foreground"><span className="h-px flex-1 bg-border" />or fill in the details<span className="h-px flex-1 bg-border" /></div>

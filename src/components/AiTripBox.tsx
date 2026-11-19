@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Loader2, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { CleanSearch } from "@/lib/search";
+import { mergeIntent, understandIntent, type SemanticMatch } from "@/lib/ai/semantic";
 
 type Resp = {
   intent: { place: string | null; time: string | null; hours: number | null; budget: number | null; walk: number | null; pref: "free" | "paid" | "both" | null; source: "claude" | "rules"; note: string | null };
@@ -13,17 +14,33 @@ type Resp = {
 export function AiTripBox({ onResult }: { onResult: (patch: Partial<CleanSearch>, go: boolean) => void }) {
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
-  const [msg, setMsg] = useState<{ ok: boolean; text: string; source?: string } | null>(null);
+  const [msg, setMsg] = useState<{ ok: boolean; text: string; source?: string; why?: SemanticMatch[] } | null>(null);
+  const [stage, setStage] = useState("");
 
   const run = async () => {
     if (text.trim().length < 3) return;
     setBusy(true);
     setMsg(null);
     try {
+      setStage("Reading your plan…");
       const res = await fetch(`/api/ai-search?q=${encodeURIComponent(text)}`);
       const j = (await res.json()) as Resp;
       if (j.error) throw new Error(j.error);
-      const i = j.intent;
+      let i = j.intent;
+      let why: SemanticMatch[] = [];
+      let source = i.source === "claude" ? "Understood by Claude AI" : "";
+      if (i.source !== "claude") {
+        // Free on-device AI: understands implied meaning ("with my elderly parents" → short walk)
+        try {
+          setStage("Running on-device AI (first time loads the model)…");
+          why = await understandIntent(text);
+          i = { ...i, ...mergeIntent(i, why) };
+          source = "Understood by on-device AI (MiniLM transformer) + rules";
+        } catch (err) {
+          console.error("On-device AI failed", err);
+          source = "Basic parser (on-device AI couldn't load)";
+        }
+      }
       const patch: Partial<CleanSearch> = {};
       if (j.destination) Object.assign(patch, { q: j.destination.label, lat: j.destination.lat, lng: j.destination.lng });
       if (i.time) patch.time = i.time;
@@ -39,7 +56,7 @@ export function AiTripBox({ onResult }: { onResult: (patch: Partial<CleanSearch>
         i.budget && `≤ ₹${i.budget}`,
         i.walk && `walk ≤ ${i.walk} m`,
       ].filter(Boolean);
-      setMsg({ ok: !!j.destination, text: parts.join(" · "), source: i.source === "claude" ? "Understood by Claude AI" : (i.note ?? "Basic parser") });
+      setMsg({ ok: !!j.destination, text: parts.join(" · "), source, why });
       onResult(patch, !!j.destination);
     } catch (e) {
       setMsg({ ok: false, text: e instanceof Error ? e.message : "Couldn't understand that — try the form below." });
@@ -64,16 +81,21 @@ export function AiTripBox({ onResult }: { onResult: (patch: Partial<CleanSearch>
             void run();
           }
         }}
-        placeholder="e.g. Dinner near Connaught Place at 8 for 2 hours, paid parking is fine, short walk"
+        placeholder="e.g. Birthday dinner near Connaught Place at 8, happy to pay for parking, with my elderly parents"
         className="w-full resize-none rounded-lg border border-input bg-card px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
       />
       <Button type="button" onClick={run} disabled={busy || text.trim().length < 3} className="w-full">
-        {busy ? <Loader2 className="animate-spin" /> : <Sparkles />} {busy ? "Understanding your plan…" : "Plan it with AI"}
+        {busy ? <Loader2 className="animate-spin" /> : <Sparkles />} {busy ? stage || "Understanding your plan…" : "Plan it with AI"}
       </Button>
       {msg && (
         <p className={msg.ok ? "text-xs text-foreground" : "text-xs text-busy"} data-testid="ai-result">
           {msg.text}
           {msg.source && <span className="block text-[11px] text-muted-foreground">{msg.source}</span>}
+          {!!msg.why?.length && (
+            <span className="mt-1 block text-[11px] text-muted-foreground" data-testid="ai-why">
+              {msg.why.map((w) => `“${w.phrase}” → ${w.label} (match ${Math.round(w.score * 100)}%)`).join(" · ")}
+            </span>
+          )}
         </p>
       )}
     </div>
