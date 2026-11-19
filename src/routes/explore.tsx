@@ -116,6 +116,7 @@ function ExploreScreen() {
         <div className="mt-3 grid gap-4 lg:grid-cols-[minmax(0,430px)_1fr]">
           <div className="relative order-1 lg:order-2">
             <div className="lg:sticky lg:top-20">
+              <MapLegend layers={layers} setLayers={setLayers} excludedCount={data?.excluded.length ?? 0} />
               <MapView
                 center={[search.lat, search.lng]}
                 zoom={16}
@@ -129,9 +130,8 @@ function ExploreScreen() {
                 onSelectParking={selectParking}
                 route={routeQ.data?.coords ?? null}
                 cluster
-                className="h-[42vh] w-full overflow-hidden rounded-2xl border border-border shadow-[var(--shadow-card)] lg:h-[calc(100vh-120px)] lg:min-h-[560px]"
+                className="h-[42vh] w-full overflow-hidden rounded-2xl border border-border shadow-[var(--shadow-card)] lg:h-[calc(100vh-180px)] lg:min-h-[560px]"
               />
-              <MapLegend layers={layers} setLayers={setLayers} excludedCount={data?.excluded.length ?? 0} />
             </div>
           </div>
 
@@ -333,7 +333,7 @@ function MapLegend({ layers, setLayers, excludedCount }: { layers: Layers; setLa
     { key: "excluded", label: `Not public (${excludedCount})`, swatch: "bg-muted-foreground/40 rounded-sm" },
   ];
   return (
-    <div className="mt-2 rounded-xl border border-border bg-card px-3 py-2 text-[11px]" data-testid="legend">
+    <div className="mb-2 rounded-xl border border-border bg-card px-3 py-2 text-[11px]" data-testid="legend">
       <div className="flex flex-wrap items-center gap-1.5">
         {items.map((it) => (
           <button
