@@ -10,7 +10,7 @@ const OVERPASS = [
   "https://overpass.kumi.systems/api/interpreter",
   "https://maps.mail.ru/osm/tools/overpass/api/interpreter",
   "https://overpass.private.coffee/api/interpreter",
-];
+] as const;
 const OSRM_TABLE = "https://routing.openstreetmap.de/routed-foot/table/v1/foot/";
 const PHOTON = "https://photon.komoot.io/api/";
 
@@ -40,7 +40,7 @@ export function overpassQuery(lat: number, lng: number) {
   // Kept deliberately light for the shared public servers: centres only, and full outlines only
   // for lots that need an area-based capacity estimate.
   const at = `${lat},${lng}`;
-  return `[out:json][timeout:15];
+  return `[out:json][timeout:25];
 nwr["amenity"~"^(restaurant|cafe|fast_food|food_court)$"]["name"](around:${LIMITS.foodRadiusM},${at})->.food;
 nwr["amenity"="parking"](around:${LIMITS.parkingRadiusM},${at})->.park;
 .food out tags center qt 150;
@@ -52,26 +52,33 @@ out count;`;
 }
 
 async function fetchOverpass(query: string, f: typeof fetch): Promise<{ elements: OsmElement[]; endpoint: string }> {
-  let lastErr: unknown = null;
-  // Try each public endpoint; the main one gets a second chance after a short pause when busy.
-  for (const endpoint of [OVERPASS[0]!, ...OVERPASS.slice(1), OVERPASS[0]!]) {
+  // Public Overpass servers are often saturated: ask two at once and take the first good answer,
+  // then fall back to the remaining mirrors one by one.
+  const attempt = async (endpoint: string, timeoutMs: number) => {
+    const res = await f(endpoint, {
+      method: "POST",
+      headers: { "User-Agent": UA, Accept: "application/json", "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8" },
+      body: new URLSearchParams({ data: query }).toString(),
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+    if (!res.ok) throw new Error(`${endpoint} HTTP ${res.status} ${(await res.text()).slice(0, 120).replace(/\s+/g, " ")}`);
+    const json = (await res.json()) as { elements?: OsmElement[]; remark?: string };
+    if (!json.elements || (json.remark && /runtime error|timed out/i.test(json.remark))) throw new Error(`${endpoint} ${json.remark ?? "no elements"}`);
+    return { elements: json.elements, endpoint };
+  };
+  try {
+    return await Promise.any([attempt(OVERPASS[0]!, 25000), attempt(OVERPASS[3]!, 25000)]);
+  } catch (e) {
+    for (const err of (e as AggregateError).errors ?? [e]) console.error("Overpass failed", err instanceof Error ? err.message : err);
+  }
+  for (const endpoint of [OVERPASS[1]!, OVERPASS[2]!]) {
     try {
-      const res = await f(endpoint, {
-        method: "POST",
-        headers: { "User-Agent": UA, Accept: "application/json", "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8" },
-        body: new URLSearchParams({ data: query }).toString(),
-        signal: AbortSignal.timeout(12000),
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status} ${(await res.text()).slice(0, 160).replace(/\s+/g, " ")}`);
-      const json = (await res.json()) as { elements?: OsmElement[] };
-      return { elements: json.elements ?? [], endpoint };
-    } catch (e) {
-      lastErr = e;
-      console.error("Overpass failed", endpoint, e instanceof Error ? e.message : e);
-      await new Promise((r) => setTimeout(r, 1500));
+      return await attempt(endpoint, 15000);
+    } catch (err) {
+      console.error("Overpass failed", err instanceof Error ? err.message : err);
     }
   }
-  throw lastErr ?? new Error("Overpass unavailable");
+  throw new Error("Overpass unavailable");
 }
 
 /** OSM walking distances for every parking → restaurant pair (one OSRM table request). */
