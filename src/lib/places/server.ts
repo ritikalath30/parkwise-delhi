@@ -15,6 +15,8 @@ const OVERPASS = [
 ] as const;
 const OSRM_TABLE = "https://routing.openstreetmap.de/routed-foot/table/v1/foot/";
 const PHOTON = "https://photon.komoot.io/api/";
+/** minLon,minLat,maxLon,maxLat — India */
+const SEARCH_BBOX = "68.1,6.5,97.4,35.7";
 
 type CacheEntry<T> = { at: number; value: T };
 function memo<T>(ttlMs: number, max = 300) {
@@ -220,6 +222,8 @@ export async function geocode(q: string, bias: { lat: number; lng: number } | nu
   url.searchParams.set("q", query);
   url.searchParams.set("limit", "7");
   url.searchParams.set("lang", "en");
+  // Delhi-first prototype: keep suggestions inside India. Widen this box to launch other countries.
+  url.searchParams.set("bbox", SEARCH_BBOX);
   if (bias) {
     url.searchParams.set("lat", String(bias.lat));
     url.searchParams.set("lon", String(bias.lng));
